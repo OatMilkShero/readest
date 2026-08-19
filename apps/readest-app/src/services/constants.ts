@@ -284,6 +284,7 @@ export const DEFAULT_READSETTINGS: ReadSettings = {
   notebookActiveTab: 'notes',
   translationProvider: 'deepl',
   translateTargetLang: 'EN',
+  openAITranslationModel: 'gpt-5.6-luna',
   wordLensAutoDownload: true,
 
   customThemes: [],

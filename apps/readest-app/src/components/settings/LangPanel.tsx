@@ -23,6 +23,7 @@ import { isCJKEnv } from '@/utils/misc';
 import {
   BoxedList,
   NavigationRow,
+  SettingsInput,
   SettingsRow,
   SettingsSelect,
   SettingsSwitchRow,
@@ -30,13 +31,25 @@ import {
 import CustomDictionaries from './CustomDictionaries';
 import WordLensPanel from './WordLensPanel';
 import { PiTranslate } from 'react-icons/pi';
+import {
+  DEFAULT_OPENAI_TRANSLATION_MODEL,
+  getOpenAITranslationAPIKey,
+  saveOpenAITranslationAPIKey,
+} from '@/services/translators/providers/openaiConfig';
+import { isTauriAppPlatform } from '@/services/environment';
 
 const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset }) => {
   const _ = useTranslation();
   const { token } = useAuth();
   const { envConfig } = useEnv();
-  const { settings, applyUILanguage, activeSettingsItemId, setActiveSettingsItemId } =
-    useSettingsStore();
+  const {
+    settings,
+    setSettings,
+    saveSettings,
+    applyUILanguage,
+    activeSettingsItemId,
+    setActiveSettingsItemId,
+  } = useSettingsStore();
   const { getView, getViewSettings, setViewSettings, recreateViewer } = useReaderStore();
   const { getBookData } = useBookDataStore();
   const view = getView(bookKey);
@@ -46,6 +59,11 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
   const [translationEnabled, setTranslationEnabled] = useState(viewSettings.translationEnabled);
   const [translationProvider, setTranslationProvider] = useState(viewSettings.translationProvider);
   const [translateTargetLang, setTranslateTargetLang] = useState(viewSettings.translateTargetLang);
+  const [openAIAPIKey, setOpenAIAPIKey] = useState('');
+  const [openAIKeyError, setOpenAIKeyError] = useState('');
+  const [openAIModel, setOpenAIModel] = useState(
+    settings.globalReadSettings.openAITranslationModel || DEFAULT_OPENAI_TRANSLATION_MODEL,
+  );
   const [showTranslateSource, setShowTranslateSource] = useState(viewSettings.showTranslateSource);
   const [ttsReadAloudText, setTtsReadAloudText] = useState(viewSettings.ttsReadAloudText);
   const [replaceQuotationMarks, setReplaceQuotationMarks] = useState(
@@ -93,6 +111,43 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
   }, [activeSettingsItemId, setActiveSettingsItemId]);
 
   const resetToDefaults = useResetViewSettings();
+
+  useEffect(() => {
+    if (translationProvider !== 'openai') return;
+    let active = true;
+    void getOpenAITranslationAPIKey()
+      .then((key) => {
+        if (active) setOpenAIAPIKey(key ?? '');
+      })
+      .catch(() => {
+        if (active) setOpenAIKeyError(_('Unable to read the OpenAI API key.'));
+      });
+    return () => {
+      active = false;
+    };
+  }, [translationProvider, _]);
+
+  const handleOpenAIAPIKeyBlur = async () => {
+    setOpenAIKeyError('');
+    try {
+      await saveOpenAITranslationAPIKey(openAIAPIKey);
+    } catch {
+      setOpenAIKeyError(_('Unable to save the OpenAI API key.'));
+    }
+  };
+
+  const handleOpenAIModelBlur = async () => {
+    const model = openAIModel.trim() || DEFAULT_OPENAI_TRANSLATION_MODEL;
+    setOpenAIModel(model);
+    if (model === settings.globalReadSettings.openAITranslationModel) return;
+
+    const newSettings = {
+      ...settings,
+      globalReadSettings: { ...settings.globalReadSettings, openAITranslationModel: model },
+    };
+    setSettings(newSettings);
+    await saveSettings(envConfig, newSettings);
+  };
 
   const handleReset = () => {
     resetToDefaults({
@@ -377,6 +432,40 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
             options={getTranslationProviderOptions()}
           />
         </SettingsRow>
+        {translationProvider === 'openai' && (
+          <>
+            <SettingsRow
+              label={_('OpenAI API Key')}
+              description={
+                openAIKeyError ||
+                (isTauriAppPlatform()
+                  ? _('Stored in the system keychain.')
+                  : _('Stored only for this browser session.'))
+              }
+            >
+              <SettingsInput
+                type='password'
+                value={openAIAPIKey}
+                onChange={(event) => setOpenAIAPIKey(event.target.value)}
+                onBlur={handleOpenAIAPIKeyBlur}
+                placeholder='sk-...'
+                aria-label={_('OpenAI API Key')}
+                autoComplete='off'
+              />
+            </SettingsRow>
+            <SettingsRow label={_('OpenAI Model')}>
+              <SettingsInput
+                type='text'
+                value={openAIModel}
+                onChange={(event) => setOpenAIModel(event.target.value)}
+                onBlur={handleOpenAIModelBlur}
+                placeholder={DEFAULT_OPENAI_TRANSLATION_MODEL}
+                aria-label={_('OpenAI Model')}
+                spellCheck={false}
+              />
+            </SettingsRow>
+          </>
+        )}
         <SettingsRow label={_('Translate To')} data-setting-id='settings.language.targetLanguage'>
           <SettingsSelect
             value={getCurrentTargetLangOption().value}

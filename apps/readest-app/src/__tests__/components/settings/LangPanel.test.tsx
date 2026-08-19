@@ -20,6 +20,8 @@ const state = vi.hoisted(() => ({
   format: 'EPUB' as BookFormat,
   primaryLanguage: 'fr',
   translationEnabled: false,
+  translationProvider: 'deepl',
+  getOpenAIKey: vi.fn(),
 }));
 
 vi.mock('@/hooks/useTranslation', () => ({
@@ -38,6 +40,19 @@ vi.mock('@/helpers/settings', () => ({
   saveViewSettings: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/services/translators/providers/openaiConfig', () => ({
+  DEFAULT_OPENAI_TRANSLATION_MODEL: 'gpt-5.6-luna',
+  getOpenAITranslationAPIKey: state.getOpenAIKey,
+  saveOpenAITranslationAPIKey: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/utils/supabase', () => ({
+  supabase: {
+    auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) },
+    from: vi.fn(),
+  },
+}));
+
 vi.mock('@/hooks/useResetSettings', () => ({
   useResetViewSettings: () => vi.fn(),
 }));
@@ -50,7 +65,7 @@ const viewSettings = () =>
   ({
     uiLanguage: '',
     translationEnabled: state.translationEnabled,
-    translationProvider: 'deepl',
+    translationProvider: state.translationProvider,
     translateTargetLang: 'en',
     showTranslateSource: true,
     ttsReadAloudText: 'both',
@@ -60,7 +75,12 @@ const viewSettings = () =>
 
 vi.mock('@/store/settingsStore', () => ({
   useSettingsStore: () => ({
-    settings: { globalViewSettings: viewSettings() },
+    settings: {
+      globalViewSettings: viewSettings(),
+      globalReadSettings: { openAITranslationModel: 'gpt-5.6-luna' },
+    },
+    setSettings: vi.fn(),
+    saveSettings: vi.fn().mockResolvedValue(undefined),
     applyUILanguage: vi.fn(),
     activeSettingsItemId: null,
     setActiveSettingsItemId: vi.fn(),
@@ -94,6 +114,8 @@ describe('LangPanel — Enable Translation availability', () => {
     state.format = 'EPUB';
     state.primaryLanguage = 'fr';
     state.translationEnabled = false;
+    state.translationProvider = 'deepl';
+    state.getOpenAIKey.mockReset().mockResolvedValue('sk-test');
   });
 
   afterEach(() => {
@@ -131,5 +153,16 @@ describe('LangPanel — Enable Translation availability', () => {
     render(<LangPanel bookKey='book-1' onRegisterReset={vi.fn()} />);
 
     expect(getEnableTranslationToggle().disabled).toBe(false);
+  });
+
+  it('shows masked key and configurable model fields for OpenAI', async () => {
+    state.translationProvider = 'openai';
+
+    render(<LangPanel bookKey='book-1' onRegisterReset={vi.fn()} />);
+
+    const keyInput = await screen.findByLabelText('OpenAI API Key');
+    expect(keyInput.getAttribute('type')).toBe('password');
+    expect((keyInput as HTMLInputElement).value).toBe('sk-test');
+    expect((screen.getByLabelText('OpenAI Model') as HTMLInputElement).value).toBe('gpt-5.6-luna');
   });
 });

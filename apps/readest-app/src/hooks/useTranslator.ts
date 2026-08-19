@@ -50,6 +50,8 @@ export function useTranslator({
       const targetLanguage = options?.target || targetLang || getLocale();
       const useCache = options?.useCache ?? false;
       const textsToTranslate = enablePreprocessing ? preprocess(input) : input;
+      const activeTranslator = translators.find((t) => t.name === selectedProvider);
+      const cacheNamespace = activeTranslator?.getCacheNamespace?.() ?? selectedProvider;
 
       if (textsToTranslate.length === 0 || textsToTranslate.every((t) => !t?.trim())) {
         return textsToTranslate;
@@ -66,7 +68,7 @@ export function useTranslator({
             text,
             sourceLanguage,
             targetLanguage,
-            selectedProvider,
+            cacheNamespace,
           );
           if (cachedTranslation) return;
 
@@ -78,7 +80,7 @@ export function useTranslator({
       if (textsNeedingTranslation.length === 0) {
         const results = await Promise.all(
           textsToTranslate.map((text) =>
-            getFromCache(text, sourceLanguage, targetLanguage, selectedProvider).then(
+            getFromCache(text, sourceLanguage, targetLanguage, cacheNamespace).then(
               (cached) => cached || text,
             ),
           ),
@@ -90,11 +92,10 @@ export function useTranslator({
       setLoading(true);
 
       try {
-        const translator = translators.find((t) => t.name === selectedProvider);
-        if (!translator) {
+        if (!activeTranslator) {
           throw new Error(`No translator found for provider: ${selectedProvider}`);
         }
-        const translatedTexts = await translator.translate(
+        const translatedTexts = await activeTranslator.translate(
           textsNeedingTranslation,
           sourceLanguage,
           targetLanguage,
@@ -109,7 +110,7 @@ export function useTranslator({
               translatedTexts[index] || '',
               sourceLanguage,
               targetLanguage,
-              selectedProvider,
+              cacheNamespace,
             );
           }),
         );
@@ -129,7 +130,7 @@ export function useTranslator({
                 originalText,
                 sourceLanguage,
                 targetLanguage,
-                selectedProvider,
+                cacheNamespace,
               );
 
               if (cachedTranslation) {

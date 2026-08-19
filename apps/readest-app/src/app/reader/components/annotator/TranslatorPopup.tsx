@@ -119,7 +119,11 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
         }
       } catch (err) {
         console.error(err);
-        if (!token) {
+        if (provider === 'openai') {
+          setError(
+            _('Unable to fetch the translation. Check your OpenAI API key and model in Settings.'),
+          );
+        } else if (!token) {
           setError(_('Unable to fetch the translation. Please log in first and try again.'));
         } else {
           setError(_('Unable to fetch the translation. Try again later.'));

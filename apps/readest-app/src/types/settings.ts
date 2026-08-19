@@ -57,6 +57,7 @@ export interface ReadSettings {
   notebookActiveTab: NotebookTab;
   translationProvider: string;
   translateTargetLang: string;
+  openAITranslationModel?: string;
   /**
    * Global Word Lens toggle: auto-download a gloss pack on demand when the
    * pair isn't cached locally. When off, the reader never fetches packs

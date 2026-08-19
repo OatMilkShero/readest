@@ -3,6 +3,11 @@ import { TranslatorName } from './providers';
 export interface TranslationProvider {
   name: string;
   label: string;
+  /**
+   * Cache namespace for providers whose output can vary with configuration
+   * beyond source/target language (for example, a selected model).
+   */
+  getCacheNamespace?: () => string;
   authRequired?: boolean;
   quotaExceeded?: boolean;
   /**
