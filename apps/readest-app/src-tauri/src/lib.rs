@@ -472,6 +472,9 @@ pub fn run() {
         tauri_plugin_single_instance::Builder::new()
             .callback(move |app, argv, cwd| {
                 if let Some(window) = app.get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
+                    macos::window::show_main_window(&window);
+                    #[cfg(not(target_os = "macos"))]
                     let _ = window.set_focus();
                 }
                 let files = get_files_from_argv(argv.clone());

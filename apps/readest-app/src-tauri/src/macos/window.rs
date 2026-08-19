@@ -47,6 +47,27 @@ enum MainWindowCloseAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MainWindowReopenAction {
+    ExitFullscreen,
+    Show,
+    Unminimize,
+    Focus,
+}
+
+const REOPEN_ACTIONS: [MainWindowReopenAction; 3] = [
+    MainWindowReopenAction::Show,
+    MainWindowReopenAction::Unminimize,
+    MainWindowReopenAction::Focus,
+];
+
+const FULLSCREEN_REOPEN_ACTIONS: [MainWindowReopenAction; 4] = [
+    MainWindowReopenAction::ExitFullscreen,
+    MainWindowReopenAction::Show,
+    MainWindowReopenAction::Unminimize,
+    MainWindowReopenAction::Focus,
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FullscreenHideCompletion {
     DefensiveHide,
     /// Last-resort fallback when AppKit refuses to leave fullscreen. A plain
@@ -90,6 +111,36 @@ fn main_window_close_action(
         MainWindowCloseAction::DefensiveHide
     } else {
         MainWindowCloseAction::Hide
+    }
+}
+
+fn main_window_reopen_actions(fullscreen: bool) -> &'static [MainWindowReopenAction] {
+    if fullscreen {
+        &FULLSCREEN_REOPEN_ACTIONS
+    } else {
+        &REOPEN_ACTIONS
+    }
+}
+
+/// Makes the existing main window visible after a second app launch is
+/// forwarded to the running process by the single-instance plugin.
+pub fn show_main_window(window: &tauri::WebviewWindow) {
+    restore_main_window_frame(window);
+    for action in main_window_reopen_actions(is_fullscreen_or_transitioning(window)) {
+        match action {
+            MainWindowReopenAction::ExitFullscreen => {
+                let _ = window.set_fullscreen(false);
+            }
+            MainWindowReopenAction::Show => {
+                let _ = window.show();
+            }
+            MainWindowReopenAction::Unminimize => {
+                let _ = window.unminimize();
+            }
+            MainWindowReopenAction::Focus => {
+                let _ = window.set_focus();
+            }
+        }
     }
 }
 
@@ -248,9 +299,30 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
 #[cfg(test)]
 mod tests {
     use super::{
-        main_window_close_action, FullscreenHideCompletion, FullscreenHideState,
-        MainWindowCloseAction,
+        main_window_close_action, main_window_reopen_actions, FullscreenHideCompletion,
+        FullscreenHideState, MainWindowCloseAction, MainWindowReopenAction,
     };
+
+    #[test]
+    fn reopening_a_hidden_fullscreen_window_restores_visibility_and_focus() {
+        assert_eq!(
+            main_window_reopen_actions(true),
+            [
+                MainWindowReopenAction::ExitFullscreen,
+                MainWindowReopenAction::Show,
+                MainWindowReopenAction::Unminimize,
+                MainWindowReopenAction::Focus,
+            ]
+        );
+        assert_eq!(
+            main_window_reopen_actions(false),
+            [
+                MainWindowReopenAction::Show,
+                MainWindowReopenAction::Unminimize,
+                MainWindowReopenAction::Focus,
+            ]
+        );
+    }
 
     #[test]
     fn hides_plainly_without_the_tahoe_workaround() {
