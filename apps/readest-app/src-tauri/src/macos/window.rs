@@ -6,10 +6,10 @@
 //! minimize — mapping close to minimize on Tahoe (PR #4890) made the red
 //! button behave like the yellow one (#5240) — and it must never quit.
 //!
-//! On macOS 26 (Tahoe) a plain `hide()` is not enough: the OS can leave
-//! a focused black phantom window on screen (#4875). The defensive path
-//! adapts kitty's zero-frame workaround to Readest's reusable main
-//! window, restoring its frame before the next show.
+//! On macOS 26 (Tahoe) and affected macOS 15.7 versions a plain `hide()`
+//! is not enough: the OS can leave a focused black phantom window on
+//! screen (#4875). The defensive path adapts kitty's zero-frame workaround
+//! to Readest's reusable main window, restoring its frame before the next show.
 //!
 //! If AppKit itself refuses to leave fullscreen, neither the zero-frame
 //! workaround nor a plain `hide()` is safe. That exceptional path alone
@@ -30,7 +30,7 @@ use objc::{msg_send, sel, sel_impl};
 use std::sync::Mutex;
 use tauri::plugin::{Builder, TauriPlugin};
 
-/// The main window's real frame, captured immediately before the Tahoe
+/// The main window's real frame, captured immediately before the
 /// defensive hide zeroes it. `None` while no defensive hide is pending.
 static SAVED_MAIN_FRAME: Mutex<Option<NSRect>> = Mutex::new(None);
 
@@ -148,7 +148,10 @@ pub fn show_main_window(window: &tauri::WebviewWindow) {
 /// handler in `lib.rs` (main thread).
 pub fn hide_main_window(window: &tauri::WebviewWindow) {
     let fullscreen = is_fullscreen_or_transitioning(window);
-    match main_window_close_action(super::os_version::is_macos_tahoe(), fullscreen) {
+    match main_window_close_action(
+        super::os_version::current_macos_requires_defensive_hide(),
+        fullscreen,
+    ) {
         MainWindowCloseAction::Hide => {
             let _ = window.hide();
         }
@@ -161,7 +164,7 @@ pub fn hide_main_window(window: &tauri::WebviewWindow) {
             if let Err(error) = window.set_fullscreen(false) {
                 log::error!("Failed to leave fullscreen before hiding main window: {error}");
                 FULLSCREEN_HIDE_STATE.lock().unwrap().cancel();
-                // A plain hide can produce Tahoe's phantom window while AppKit
+                // A plain hide can produce a phantom window while AppKit
                 // still owns the fullscreen frame. This is intentionally the
                 // only path where close degrades to minimize.
                 let _ = window.minimize();
@@ -210,7 +213,7 @@ fn is_fullscreen_or_transitioning(window: &tauri::WebviewWindow) -> bool {
     }
 }
 
-/// Tahoe defensive hide: zero the frame, then order out, both in the
+/// Defensive hide: zero the frame, then order out, both in the
 /// same runloop turn.
 ///
 /// The zero rect keeps the old frame's *top-left* corner: AppKit frames
@@ -298,6 +301,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::os_version::requires_defensive_hide;
     use super::{
         main_window_close_action, main_window_reopen_actions, FullscreenHideCompletion,
         FullscreenHideState, MainWindowCloseAction, MainWindowReopenAction,
@@ -325,17 +329,33 @@ mod tests {
     }
 
     #[test]
-    fn hides_plainly_without_the_tahoe_workaround() {
+    fn hides_plainly_on_macos_15_6() {
         assert_eq!(
-            main_window_close_action(false, false),
+            main_window_close_action(requires_defensive_hide(15, 6, 1), false),
             MainWindowCloseAction::Hide
+        );
+    }
+
+    #[test]
+    fn hides_defensively_on_macos_15_7_0() {
+        assert_eq!(
+            main_window_close_action(requires_defensive_hide(15, 7, 0), false),
+            MainWindowCloseAction::DefensiveHide
+        );
+    }
+
+    #[test]
+    fn hides_defensively_on_macos_15_7_7() {
+        assert_eq!(
+            main_window_close_action(requires_defensive_hide(15, 7, 7), false),
+            MainWindowCloseAction::DefensiveHide
         );
     }
 
     #[test]
     fn hides_defensively_on_tahoe() {
         assert_eq!(
-            main_window_close_action(true, false),
+            main_window_close_action(requires_defensive_hide(26, 0, 0), false),
             MainWindowCloseAction::DefensiveHide
         );
     }
@@ -343,7 +363,7 @@ mod tests {
     #[test]
     fn exits_fullscreen_before_the_defensive_hide() {
         assert_eq!(
-            main_window_close_action(true, true),
+            main_window_close_action(requires_defensive_hide(15, 7, 7), true),
             MainWindowCloseAction::ExitFullscreenThenDefensiveHide
         );
     }

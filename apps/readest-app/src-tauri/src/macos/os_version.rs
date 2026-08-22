@@ -1,21 +1,21 @@
-//! macOS OS-version detection for the Tahoe close-to-hide workaround.
+//! macOS OS-version detection for the close-to-hide workaround.
 //!
 //! macOS 26 (Tahoe) regressed `NSWindow` ordering so that `orderOut:` —
 //! which Tauri's `WebviewWindow::hide()` maps to — can leave a focused
 //! black phantom window on screen instead of hiding it. See issue #4875.
-//! The workaround is intentionally scoped to major version 26. A future
-//! macOS release should use the normal AppKit path unless it is independently
-//! shown to have the same regression.
+//! The same failure is reproducible on macOS 15.7, but was not reproducible
+//! on macOS 15.6. The workaround is therefore intentionally scoped to macOS
+//! 26 and macOS 15.7 or later within major version 15.
 
 use objc::{class, msg_send, sel, sel_impl};
 
-/// Returns true when `major` is macOS Tahoe (26).
-pub(crate) fn is_tahoe(major: i64) -> bool {
-    major == 26
+/// Returns true for macOS versions that require the defensive hide path.
+pub(crate) fn requires_defensive_hide(major: i64, minor: i64, _patch: i64) -> bool {
+    major == 26 || (major == 15 && minor >= 7)
 }
 
-/// Reads the running macOS major version via `NSProcessInfo`.
-fn macos_major_version() -> i64 {
+/// Reads the running macOS version via `NSProcessInfo`.
+fn macos_version() -> (i64, i64, i64) {
     #[repr(C)]
     struct NSOperatingSystemVersion {
         major: i64,
@@ -27,27 +27,41 @@ fn macos_major_version() -> i64 {
         let process_info: *mut objc::runtime::Object =
             msg_send![class!(NSProcessInfo), processInfo];
         let version: NSOperatingSystemVersion = msg_send![process_info, operatingSystemVersion];
-        version.major
+        (version.major, version.minor, version.patch)
     }
 }
 
-/// True when running on macOS Tahoe (26).
-pub fn is_macos_tahoe() -> bool {
-    is_tahoe(macos_major_version())
+/// True when the running macOS version requires the defensive hide path.
+pub fn current_macos_requires_defensive_hide() -> bool {
+    let (major, minor, patch) = macos_version();
+    requires_defensive_hide(major, minor, patch)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::is_tahoe;
+    use super::requires_defensive_hide;
 
     #[test]
-    fn detects_tahoe() {
-        assert!(is_tahoe(26));
+    fn uses_normal_hide_before_macos_15_7() {
+        assert!(!requires_defensive_hide(15, 6, 1));
+    }
+
+    #[test]
+    fn detects_affected_macos_15_7_versions() {
+        assert!(requires_defensive_hide(15, 7, 0));
+        assert!(requires_defensive_hide(15, 7, 7));
+    }
+
+    #[test]
+    fn detects_macos_tahoe() {
+        assert!(requires_defensive_hide(26, 0, 0));
+        assert!(requires_defensive_hide(26, 5, 2));
     }
 
     #[test]
     fn rejects_other_major_versions() {
-        assert!(!is_tahoe(25));
-        assert!(!is_tahoe(27));
+        assert!(!requires_defensive_hide(14, 7, 7));
+        assert!(!requires_defensive_hide(25, 7, 0));
+        assert!(!requires_defensive_hide(27, 0, 0));
     }
 }
