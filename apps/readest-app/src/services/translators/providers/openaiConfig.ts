@@ -8,6 +8,7 @@ const SECURE_ITEM_KEY = 'openai-translation-api-key';
 const SESSION_STORAGE_KEY = 'readest-openai-translation-api-key';
 
 let memoryAPIKey: string | null | undefined;
+let apiKeyReadInFlight: Promise<string | null> | null = null;
 
 export const getOpenAITranslationModel = (): string => {
   const configured =
@@ -25,9 +26,21 @@ export const getOpenAITranslationAPIKey = async (): Promise<string | null> => {
   if (memoryAPIKey !== undefined) return memoryAPIKey;
 
   if (isTauriAppPlatform()) {
-    const response = await getSecureItem({ key: SECURE_ITEM_KEY });
-    memoryAPIKey = response.value?.trim() || null;
-    return memoryAPIKey;
+    if (!apiKeyReadInFlight) {
+      apiKeyReadInFlight = (async () => {
+        const response = await getSecureItem({ key: SECURE_ITEM_KEY });
+        if (response.error) {
+          throw new Error(`Could not read OpenAI API key: ${response.error}`);
+        }
+        if (memoryAPIKey === undefined) {
+          memoryAPIKey = response.value?.trim() || null;
+        }
+        return memoryAPIKey;
+      })().finally(() => {
+        apiKeyReadInFlight = null;
+      });
+    }
+    return apiKeyReadInFlight;
   }
 
   memoryAPIKey = globalThis.sessionStorage?.getItem(SESSION_STORAGE_KEY)?.trim() || null;
