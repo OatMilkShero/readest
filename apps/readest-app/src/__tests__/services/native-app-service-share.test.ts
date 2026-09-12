@@ -94,6 +94,22 @@ describe('NativeAppService.saveFile share gating', () => {
     expect(saveDialogMock).not.toHaveBeenCalled();
   });
 
+  test('uses the native save dialog on macOS when share=false', async () => {
+    const service = await loadServiceWithOS('macos');
+    const saved = await service.saveFile('notes.md', 'hello', {
+      share: false,
+      mimeType: 'text/markdown',
+    });
+
+    expect(saved).toBe(true);
+    expect(shareFileMock).not.toHaveBeenCalled();
+    expect(saveDialogMock).toHaveBeenCalledWith({
+      defaultPath: 'notes.md',
+      filters: [{ name: 'MD', extensions: ['md'] }],
+    });
+    expect(writeTextFileMock).toHaveBeenCalledWith('/tmp/exported.md', 'hello');
+  });
+
   // Regression: on Windows the sharekit plugin's share UI blocks the main
   // thread waiting on cancel/complete callbacks that may never fire, freezing
   // the app. See issue #4343. Windows must fall through to the save dialog.

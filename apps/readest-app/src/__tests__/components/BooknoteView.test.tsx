@@ -1,4 +1,4 @@
-import { render, act, cleanup } from '@testing-library/react';
+import { render, act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { BookNote } from '@/types/book';
@@ -20,6 +20,7 @@ let mockProgress: { location: string } | null;
 let mockBooknotes: BookNote[];
 let mockInsights: SavedGPTInsight[];
 const mockLoadBook = vi.fn();
+const mockEventDispatch = vi.hoisted(() => vi.fn());
 
 // ---------- Mocks ----------
 // Production code uses per-field selectors; mock must apply them.
@@ -64,7 +65,7 @@ vi.mock('@/hooks/useTranslation', () => ({
 }));
 
 vi.mock('@/utils/event', () => ({
-  eventDispatcher: { dispatch: vi.fn(), on: vi.fn(), off: vi.fn() },
+  eventDispatcher: { dispatch: mockEventDispatch, on: vi.fn(), off: vi.fn() },
 }));
 
 vi.mock('@/app/reader/components/sidebar/BooknoteItem', () => ({
@@ -72,7 +73,11 @@ vi.mock('@/app/reader/components/sidebar/BooknoteItem', () => ({
 }));
 
 vi.mock('@/app/reader/components/EmptyState', () => ({
-  default: () => null,
+  default: ({ label }: { label: string }) => <div>{label}</div>,
+}));
+
+vi.mock('@/components/Dropdown', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 // Virtuoso is replaced with a stub that exposes a spy-able `scrollToIndex`
@@ -123,6 +128,21 @@ const makeNote = (cfi: string): BookNote =>
     updatedAt: 0,
   }) as BookNote;
 
+const makeInsight = (): SavedGPTInsight => ({
+  id: 'insight-1',
+  conversationId: 'conversation-1',
+  assistantMessageId: 'assistant-1',
+  bookHash: 'book1',
+  bookTitle: 'The Book',
+  bookAuthor: 'The Author',
+  chapter: 'Chapter 4',
+  locator: 'epubcfi(/6/4!/4/2:0)',
+  selectedPassage: 'A selected passage',
+  question: 'Why?',
+  answer: 'Because.',
+  createdAt: 1,
+});
+
 const fireOverlayScrollbarsInitialized = () => {
   act(() => {
     capturedInitialized?.({ elements: () => ({ viewport: document.createElement('div') }) });
@@ -136,6 +156,7 @@ beforeEach(() => {
   mockProgress = null;
   mockInsights = [];
   mockLoadBook.mockClear();
+  mockEventDispatch.mockClear();
   mockBooknotes = [
     makeNote('epubcfi(/6/4!/4/2:0)'),
     makeNote('epubcfi(/6/6!/4/4:0)'),
@@ -153,27 +174,51 @@ beforeEach(() => {
 describe('BooknoteView — saved GPT insights', () => {
   it('includes a saved insight in the chapter-grouped annotation list', () => {
     mockBooknotes = [];
-    mockInsights = [
-      {
-        id: 'insight-1',
-        conversationId: 'conversation-1',
-        assistantMessageId: 'assistant-1',
-        bookHash: 'book1',
-        bookTitle: 'The Book',
-        bookAuthor: 'The Author',
-        chapter: 'Chapter 4',
-        locator: 'epubcfi(/6/4!/4/2:0)',
-        selectedPassage: 'A selected passage',
-        question: 'Why?',
-        answer: 'Because.',
-        createdAt: 1,
-      },
-    ];
+    mockInsights = [makeInsight()];
 
     render(<BooknoteView type='annotation' bookKey='book1-view' toc={[]} />);
 
     expect(mockLoadBook).toHaveBeenCalledWith('book1');
     expect(capturedVirtuosoProps?.['totalCount']).toBe(2);
+  });
+
+  it('filters annotations and GPT insights as separate view-model categories', () => {
+    mockBooknotes = [
+      makeNote('epubcfi(/6/4!/4/2:0)'),
+      { ...makeNote('epubcfi(/6/4!/4/4:0)'), note: 'My note' },
+    ];
+    mockInsights = [makeInsight()];
+
+    render(<BooknoteView type='annotation' bookKey='book1-view' toc={[]} />);
+    expect(capturedVirtuosoProps?.['totalCount']).toBe(4);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Highlights' }));
+    expect(capturedVirtuosoProps?.['totalCount']).toBe(3);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
+    expect(capturedVirtuosoProps?.['totalCount']).toBe(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'GPT Insights' }));
+    expect(capturedVirtuosoProps?.['totalCount']).toBe(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(capturedVirtuosoProps?.['totalCount']).toBe(4);
+  });
+
+  it('shows a clean empty state when the GPT Insights filter has no matches', () => {
+    render(<BooknoteView type='annotation' bookKey='book1-view' toc={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'GPT Insights' }));
+    expect(screen.getByText('No GPT Insights')).toBeTruthy();
+  });
+
+  it('routes the visible export control through the existing export event', () => {
+    render(<BooknoteView type='annotation' bookKey='book1-view' toc={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Knowledge' }));
+    expect(mockEventDispatch).toHaveBeenCalledWith('export-annotations', {
+      bookKey: 'book1-view',
+    });
   });
 });
 

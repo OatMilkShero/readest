@@ -15,6 +15,7 @@ const makeNote = (over: Partial<BookNote>): BookNote => ({
   id: 'id',
   type: 'annotation',
   cfi: 'epubcfi(/6/4!/4)',
+  text: 'selected text',
   note: '',
   createdAt: 1,
   updatedAt: 1,
@@ -188,13 +189,13 @@ describe('filterExportGroups', () => {
 });
 
 describe('summarizeAnnotations', () => {
-  it('splits live annotations into highlights and notes', () => {
+  it('counts highlights and notes as overlapping facets', () => {
     const counts = summarizeAnnotations([
       makeNote({ id: 'a' }),
       makeNote({ id: 'b', note: 'thought' }),
       makeNote({ id: 'c' }),
     ]);
-    expect(counts).toEqual({ highlights: 2, notes: 1 });
+    expect(counts).toEqual({ highlights: 3, notes: 1 });
   });
 
   it('ignores tombstoned annotations', () => {
@@ -206,11 +207,12 @@ describe('summarizeAnnotations', () => {
     expect(counts).toEqual({ highlights: 1, notes: 0 });
   });
 
-  it('splits on body truthiness so the counts agree with the Notes filter chip', () => {
-    // filterBooknotes partitions on `note.note` without trimming, so a
-    // whitespace-only body lands in the Notes bucket on both sides.
+  it('uses body truthiness so the counts agree with both filter chips', () => {
+    // A highlighted annotation with a whitespace-only note body belongs to
+    // both overlapping facets because both filters use untrimmed truthiness.
     const notes = [makeNote({ note: '   ' })];
-    expect(summarizeAnnotations(notes)).toEqual({ highlights: 0, notes: 1 });
+    expect(summarizeAnnotations(notes)).toEqual({ highlights: 1, notes: 1 });
+    expect(filterBooknotes(notes, { kind: 'highlights', query: '' }).length).toBe(1);
     expect(filterBooknotes(notes, { kind: 'notes', query: '' }).length).toBe(1);
   });
 

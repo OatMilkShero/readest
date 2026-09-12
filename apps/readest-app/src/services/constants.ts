@@ -482,6 +482,7 @@ export const DEFAULT_NOTE_EXPORT_CONFIG: NoteExportConfig = {
   includeChapterTitles: true,
   includeQuotes: true,
   includeNotes: true,
+  includeGPTInsights: true,
   includePageNumber: true,
   includeTimestamp: false,
   includeChapterSeparator: false,

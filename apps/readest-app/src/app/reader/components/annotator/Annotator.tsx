@@ -1930,7 +1930,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
 
     // The JSON file is meant to be re-imported, not pasted somewhere, so it
     // doesn't hijack the clipboard the way the prose formats do.
-    if (format !== 'json') {
+    if (format !== 'json' && !appService?.isMacOSApp) {
       setTimeout(() => {
         // Delay to ensure it won't be overridden by system clipboard actions
         void writeTextToClipboard(content);
@@ -1944,11 +1944,22 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     const filename = format === 'json' ? `${safeTitle}-annotations.json` : `${safeTitle}.${ext}`;
     const saved = await appService?.saveFile(filename, content, {
       mimeType,
-      share: true,
-      sharePosition,
+      // Desktop macOS knowledge export is a document-save workflow. iOS and
+      // other supported contexts retain their existing share/fallback path.
+      share: !appService?.isMacOSApp,
+      ...(!appService?.isMacOSApp && sharePosition ? { sharePosition } : {}),
     });
 
-    if (appService?.isMacOSApp) return;
+    if (appService?.isMacOSApp) {
+      if (saved) {
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          message: _('Exported successfully'),
+          timeout: 2000,
+        });
+      }
+      return;
+    }
     // Without the clipboard fallback there is nothing to fall back to, so a
     // failed JSON save has to be reported as a failure.
     const failedJson = format === 'json' && !saved;

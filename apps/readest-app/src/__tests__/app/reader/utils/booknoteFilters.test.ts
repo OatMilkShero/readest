@@ -29,17 +29,18 @@ describe('filterBooknotes', () => {
   const tombstoned = makeNote({ text: 'gone', note: 'gone note', deletedAt: 2000 });
 
   it('excludes tombstoned notes for every kind', () => {
-    for (const kind of ['all', 'highlights', 'notes'] as const) {
+    for (const kind of ['all', 'highlights', 'notes', 'gpt-insights'] as const) {
       expect(filterBooknotes([tombstoned], { kind, query: '' })).toEqual([]);
       expect(filterBooknotes([tombstoned], { kind, query: 'gone' })).toEqual([]);
     }
   });
 
-  it('partitions by note-body emptiness', () => {
+  it('treats highlights and notes as overlapping facets', () => {
     const notes = [highlight, noted];
     expect(filterBooknotes(notes, { kind: 'all', query: '' })).toEqual([highlight, noted]);
-    expect(filterBooknotes(notes, { kind: 'highlights', query: '' })).toEqual([highlight]);
+    expect(filterBooknotes(notes, { kind: 'highlights', query: '' })).toEqual([highlight, noted]);
     expect(filterBooknotes(notes, { kind: 'notes', query: '' })).toEqual([noted]);
+    expect(filterBooknotes(notes, { kind: 'gpt-insights', query: '' })).toEqual([]);
   });
 
   it('matches the query against highlight text, case-insensitively', () => {
@@ -55,9 +56,9 @@ describe('filterBooknotes', () => {
   });
 
   it('applies kind and query together', () => {
-    expect(filterBooknotes([highlight, noted], { kind: 'highlights', query: 'rabbit' })).toEqual(
-      [],
-    );
+    expect(filterBooknotes([highlight, noted], { kind: 'highlights', query: 'rabbit' })).toEqual([
+      noted,
+    ]);
     expect(filterBooknotes([highlight, noted], { kind: 'notes', query: 'rabbit' })).toEqual([
       noted,
     ]);
@@ -71,6 +72,8 @@ describe('filterBooknotes', () => {
     const noText = makeNote({ text: undefined, note: 'orphan note' });
     expect(filterBooknotes([noText], { kind: 'all', query: 'orphan' })).toEqual([noText]);
     expect(filterBooknotes([noText], { kind: 'all', query: 'nothing' })).toEqual([]);
+    expect(filterBooknotes([noText], { kind: 'highlights', query: '' })).toEqual([]);
+    expect(filterBooknotes([noText], { kind: 'notes', query: '' })).toEqual([noText]);
   });
 
   it('drops notes whose color is excluded and keeps the rest', () => {

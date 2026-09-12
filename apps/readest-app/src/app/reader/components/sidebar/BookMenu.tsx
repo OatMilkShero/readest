@@ -215,7 +215,7 @@ const BookMenu: React.FC<BookMenuProps> = ({ menuClassName, setIsDropdownOpen })
         />
       )}
       <hr aria-hidden='true' className='border-base-200 my-1' />
-      <MenuItem label={_('Export Annotations')} onClick={handleExportAnnotations} />
+      <MenuItem label={_('Export Knowledge')} onClick={handleExportAnnotations} />
       <MenuItem label={_('Import Annotations')} onClick={handleImportAnnotations} />
       <MenuItem
         label={_('Clear Annotations')}

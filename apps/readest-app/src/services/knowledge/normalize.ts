@@ -2,6 +2,28 @@ import type { Book, BooknoteGroup } from '@/types/book';
 import type { SavedGPTInsight } from '@/services/reader-gpt/types';
 import type { KnowledgeChapter, KnowledgeEntry, ReadingKnowledge } from './types';
 
+export interface KnowledgeExportScope {
+  highlights: boolean;
+  notes: boolean;
+  gptInsights: boolean;
+}
+
+export const filterReadingKnowledge = (
+  knowledge: ReadingKnowledge,
+  scope: KnowledgeExportScope,
+): ReadingKnowledge => ({
+  ...knowledge,
+  chapters: knowledge.chapters
+    .map((chapter) => ({
+      ...chapter,
+      entries: chapter.entries.filter((entry) => {
+        if (entry.kind === 'gpt-insight') return scope.gptInsights;
+        return (scope.highlights && !!entry.quote) || (scope.notes && !!entry.note);
+      }),
+    }))
+    .filter((chapter) => chapter.entries.length > 0),
+});
+
 export const normalizeReadingKnowledge = ({
   book,
   annotationGroups,

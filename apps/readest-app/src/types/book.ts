@@ -376,8 +376,11 @@ export interface NoteExportConfig {
   // public bucket (sign-in) unless the book already has a public cover URL.
   includeCoverImage: boolean;
   includeChapterTitles: boolean;
+  // These select overlapping knowledge-item facets. An annotation with both
+  // highlighted text and a user note is included when either facet is enabled.
   includeQuotes: boolean;
   includeNotes: boolean;
+  includeGPTInsights: boolean;
   includePageNumber: boolean;
   includeTimestamp: boolean;
   includeChapterSeparator: boolean;

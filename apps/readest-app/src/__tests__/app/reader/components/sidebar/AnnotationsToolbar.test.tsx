@@ -41,7 +41,9 @@ const defaultProps = {
   isSearchVisible: false,
   highlightCount: 9,
   noteCount: 3,
-  matchCount: 12,
+  insightCount: 2,
+  totalCount: 11,
+  matchCount: 11,
   isFiltering: false,
   colors: [] as HighlightColor[],
   styles: [] as HighlightStyle[],
@@ -53,6 +55,7 @@ const defaultProps = {
   onToggleColor: vi.fn(),
   onToggleStyle: vi.fn(),
   onResetFilters: vi.fn(),
+  onExport: vi.fn(),
 };
 
 beforeEach(() => {
@@ -70,6 +73,8 @@ describe('AnnotationsToolbar', () => {
     expect(defaultProps.onFilterKindChange).toHaveBeenCalledWith('highlights');
     fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
     expect(defaultProps.onFilterKindChange).toHaveBeenCalledWith('notes');
+    fireEvent.click(screen.getByRole('button', { name: 'GPT Insights' }));
+    expect(defaultProps.onFilterKindChange).toHaveBeenCalledWith('gpt-insights');
   });
 
   it('marks the active chip with aria-pressed', () => {
@@ -142,24 +147,44 @@ describe('AnnotationsToolbar', () => {
 
   it('summarizes the annotation mix', () => {
     render(<AnnotationsToolbar {...defaultProps} />);
-    expect(screen.getByTestId('annotations-summary').textContent).toBe('9 Highlights · 3 Notes');
+    expect(screen.getByTestId('annotations-summary').textContent).toBe(
+      '9 Highlights · 3 Notes · 2 GPT Insights',
+    );
   });
 
   it('names only the kind that is present', () => {
-    const { rerender } = render(<AnnotationsToolbar {...defaultProps} noteCount={0} />);
+    const { rerender } = render(
+      <AnnotationsToolbar {...defaultProps} noteCount={0} insightCount={0} />,
+    );
     expect(screen.getByTestId('annotations-summary').textContent).toBe('9 Highlights');
-    rerender(<AnnotationsToolbar {...defaultProps} highlightCount={0} />);
+    rerender(<AnnotationsToolbar {...defaultProps} highlightCount={0} insightCount={0} />);
     expect(screen.getByTestId('annotations-summary').textContent).toBe('3 Notes');
+    rerender(<AnnotationsToolbar {...defaultProps} highlightCount={0} noteCount={0} />);
+    expect(screen.getByTestId('annotations-summary').textContent).toBe('2 GPT Insights');
   });
 
   it('reports matches against the total while filtering', () => {
     render(<AnnotationsToolbar {...defaultProps} isFiltering matchCount={5} />);
-    expect(screen.getByTestId('annotations-summary').textContent).toBe('5 of 12');
+    expect(screen.getByTestId('annotations-summary').textContent).toBe('5 of 11');
   });
 
   it('stays silent when there is nothing to count', () => {
-    render(<AnnotationsToolbar {...defaultProps} highlightCount={0} noteCount={0} />);
+    render(
+      <AnnotationsToolbar
+        {...defaultProps}
+        highlightCount={0}
+        noteCount={0}
+        insightCount={0}
+        totalCount={0}
+      />,
+    );
     expect(screen.queryByTestId('annotations-summary')).toBeNull();
+  });
+
+  it('exposes the knowledge export action', () => {
+    render(<AnnotationsToolbar {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export Knowledge' }));
+    expect(defaultProps.onExport).toHaveBeenCalledTimes(1);
   });
 
   it('yields the row to the search input', () => {

@@ -59,10 +59,11 @@ const BooknoteView: React.FC<{
   const config = getConfig(bookKey)!;
   const progress = getProgress(bookKey);
   const allNotes = config.booknotes ?? [];
+  const bookHash = bookKey.split('-')[0] ?? '';
 
   useEffect(() => {
-    if (type === 'annotation') void loadBook(bookKey.split('-')[0] ?? '');
-  }, [bookKey, loadBook, type]);
+    if (type === 'annotation') void loadBook(bookHash);
+  }, [bookHash, loadBook, type]);
 
   const [filterKind, setFilterKind] = useState<AnnotationFilterKind>('all');
   const [searchInput, setSearchInput] = useState('');
@@ -119,6 +120,10 @@ const BooknoteView: React.FC<{
   );
   const facets = useMemo(() => collectAnnotationFacets(liveAnnotations), [liveAnnotations]);
   const counts = useMemo(() => summarizeAnnotations(liveAnnotations), [liveAnnotations]);
+  const bookInsights = useMemo(
+    () => insights.filter((insight) => insight.bookHash === bookHash),
+    [bookHash, insights],
+  );
 
   // Filter active notes of this type, then apply the hub's kind/query/facet
   // filter (annotation tab only). useMemo so referential stability flows
@@ -156,17 +161,19 @@ const BooknoteView: React.FC<{
   }, [filteredNotes, toc]);
 
   const visibleInsights = useMemo(() => {
-    if (type !== 'annotation' || filterKind !== 'all') return [];
-    if (excludedColors.length > 0 || excludedStyles.length > 0) return [];
+    if (type !== 'annotation' || (filterKind !== 'all' && filterKind !== 'gpt-insights')) return [];
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return insights.filter((insight) => {
-      if (insight.bookHash !== (bookKey.split('-')[0] ?? '')) return false;
+    return bookInsights.filter((insight) => {
       if (!normalizedQuery) return true;
       return [insight.chapter, insight.selectedPassage, insight.question, insight.answer].some(
         (value) => value?.toLocaleLowerCase().includes(normalizedQuery),
       );
     });
-  }, [bookKey, excludedColors, excludedStyles, filterKind, insights, query, type]);
+  }, [bookInsights, filterKind, query, type]);
+
+  const handleExportKnowledge = useCallback(() => {
+    eventDispatcher.dispatch('export-annotations', { bookKey });
+  }, [bookKey]);
 
   // Flatten group/item tree into a single virtualizable list.
   const flatItems = useMemo<FlatBooknoteRow[]>(() => {
@@ -447,6 +454,8 @@ const BooknoteView: React.FC<{
           isSearchVisible={isSearchBarVisible}
           highlightCount={counts.highlights}
           noteCount={counts.notes}
+          insightCount={bookInsights.length}
+          totalCount={liveAnnotations.length + bookInsights.length}
           matchCount={filteredNotes.length + visibleInsights.length}
           isFiltering={isFiltering}
           onCloseSearch={() => setSearchBarVisible(false)}
@@ -459,6 +468,7 @@ const BooknoteView: React.FC<{
           onToggleColor={toggleColor}
           onToggleStyle={toggleStyle}
           onResetFilters={resetFilters}
+          onExport={handleExportKnowledge}
         />
       )}
       <div ref={listHostRef}>
@@ -467,7 +477,12 @@ const BooknoteView: React.FC<{
             className='flex items-center justify-center overflow-hidden'
             style={{ height: containerHeight }}
           >
-            <EmptyState Icon={PiMagnifyingGlass} label={_('No Matching Annotations')} />
+            <EmptyState
+              Icon={PiMagnifyingGlass}
+              label={
+                filterKind === 'gpt-insights' ? _('No GPT Insights') : _('No Matching Annotations')
+              }
+            />
           </div>
         ) : isEmpty ? (
           <div

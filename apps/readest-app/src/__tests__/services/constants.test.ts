@@ -686,6 +686,7 @@ describe('services/constants', () => {
       expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includeChapterTitles).toBe('boolean');
       expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includeQuotes).toBe('boolean');
       expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includeNotes).toBe('boolean');
+      expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includeGPTInsights).toBe('boolean');
       expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includePageNumber).toBe('boolean');
       expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includeTimestamp).toBe('boolean');
       expect(typeof DEFAULT_NOTE_EXPORT_CONFIG.includeChapterSeparator).toBe('boolean');

@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import React, { useEffect, useRef } from 'react';
 import { FaSearch, FaTimes } from 'react-icons/fa';
-import { MdFilterList } from 'react-icons/md';
+import { MdFilterList, MdOutlineFileDownload } from 'react-icons/md';
 
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
@@ -15,7 +15,7 @@ import {
 } from '../../utils/annotatorUtil';
 import Dropdown from '@/components/Dropdown';
 
-const FILTER_KINDS: AnnotationFilterKind[] = ['all', 'highlights', 'notes'];
+const FILTER_KINDS: AnnotationFilterKind[] = ['all', 'highlights', 'notes', 'gpt-insights'];
 
 interface AnnotationsFilterPanelProps {
   filterKind: AnnotationFilterKind;
@@ -52,10 +52,11 @@ const AnnotationsFilterPanel: React.FC<AnnotationsFilterPanelProps> = ({
     all: _('All'),
     highlights: _('Highlights'),
     notes: _('Notes'),
+    'gpt-insights': _('GPT Insights'),
   };
 
-  const showColors = colors.length >= 2;
-  const showStyles = styles.length >= 2;
+  const showColors = filterKind !== 'gpt-insights' && colors.length >= 2;
+  const showStyles = filterKind !== 'gpt-insights' && styles.length >= 2;
 
   const resolveColorLabel = (color: HighlightColor) =>
     getHighlightColorLabel(settings, color) || (isDefaultHighlightColor(color) ? _(color) : color);
@@ -178,6 +179,8 @@ interface AnnotationsToolbarProps {
   isSearchVisible: boolean;
   highlightCount: number;
   noteCount: number;
+  insightCount: number;
+  totalCount: number;
   matchCount: number;
   isFiltering: boolean;
   colors: HighlightColor[];
@@ -190,6 +193,7 @@ interface AnnotationsToolbarProps {
   onToggleColor: (color: HighlightColor) => void;
   onToggleStyle: (style: HighlightStyle) => void;
   onResetFilters: () => void;
+  onExport: () => void;
 }
 
 const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
@@ -198,6 +202,8 @@ const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
   isSearchVisible,
   highlightCount,
   noteCount,
+  insightCount,
+  totalCount,
   matchCount,
   isFiltering,
   colors,
@@ -210,6 +216,7 @@ const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
   onToggleColor,
   onToggleStyle,
   onResetFilters,
+  onExport,
 }) => {
   const _ = useTranslation();
   const iconSize14 = useResponsiveSize(14);
@@ -228,20 +235,20 @@ const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
   // The search field takes the whole row when it is open, so the summary only
   // speaks while it is closed: the mix of the book's annotations at rest, and
   // how much of it survives the filters once any are on.
-  const total = highlightCount + noteCount;
   const kindLabels = [
     highlightCount > 0 && _('{{count}} Highlights', { count: highlightCount }),
     noteCount > 0 && _('{{count}} Notes', { count: noteCount }),
+    insightCount > 0 && _('{{count}} GPT Insights', { count: insightCount }),
   ].filter(Boolean);
   const summary = isFiltering
-    ? _('{{matched}} of {{total}}', { matched: matchCount, total })
+    ? _('{{matched}} of {{total}}', { matched: matchCount, total: totalCount })
     : null;
 
   return (
     // justify-end, not justify-between: with no annotations yet the filter
     // button is the only child and must still sit at the trailing edge.
     <div className='annotations-toolbar flex items-center justify-end gap-2 ps-3 pe-3 pb-2 pt-2'>
-      {!isSearchVisible && total > 0 && (
+      {!isSearchVisible && totalCount > 0 && (
         <div
           data-testid='annotations-summary'
           aria-live='polite'
@@ -276,6 +283,18 @@ const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
             <FaTimes size={iconSize12} className='text-base-content/50' />
           </button>
         </div>
+      )}
+      {!isSearchVisible && (
+        <button
+          type='button'
+          title={_('Export Knowledge')}
+          aria-label={_('Export Knowledge')}
+          onClick={onExport}
+          className='eink-bordered btn btn-ghost h-7 min-h-7 gap-1 px-2 text-xs font-normal'
+        >
+          <MdOutlineFileDownload />
+          <span>{_('Export')}</span>
+        </button>
       )}
       <Dropdown
         label={_('Filter Annotations')}

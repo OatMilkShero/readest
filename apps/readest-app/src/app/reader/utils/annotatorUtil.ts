@@ -452,7 +452,7 @@ export function mergeRestyledAnnotation(existing: BookNote, restyled: BookNote):
   };
 }
 
-export type AnnotationFilterKind = 'all' | 'highlights' | 'notes';
+export type AnnotationFilterKind = 'all' | 'highlights' | 'notes' | 'gpt-insights';
 
 export interface BooknoteFilter {
   kind: AnnotationFilterKind;
@@ -464,9 +464,10 @@ export interface BooknoteFilter {
 /**
  * Filter booknotes for the annotations hub and the Notebook search.
  *
- * Tombstones are always excluded. `kind` partitions on the note body:
- * a unified annotation is a "note" when `note` is non-empty and a plain
- * "highlight" otherwise (#5398's All/Highlights/Notes chips). An empty or
+ * Tombstones are always excluded. Highlights and Notes are overlapping facets:
+ * selected text makes an annotation a highlight, while a non-empty note body
+ * also makes it a note. The separate GPT Insight store is merged by
+ * BooknoteView, so its filter kind selects no BookNotes here. An empty or
  * whitespace query matches everything; otherwise the query is matched
  * case-insensitively against the highlighted text and the note body
  * (same semantics the Notebook SearchBar has always used). Excluded
@@ -478,8 +479,9 @@ export function filterBooknotes(notes: BookNote[], filter: BooknoteFilter): Book
   const lowercaseQuery = filter.query.trim().toLowerCase();
   return notes.filter((note) => {
     if (note.deletedAt) return false;
+    if (kind === 'gpt-insights') return false;
     if (kind === 'notes' && !note.note) return false;
-    if (kind === 'highlights' && note.note) return false;
+    if (kind === 'highlights' && !note.text) return false;
     if (note.color && excludedColors?.includes(note.color)) return false;
     if (note.style && excludedStyles?.includes(note.style)) return false;
     if (!lowercaseQuery) return true;
@@ -522,18 +524,18 @@ export interface AnnotationCounts {
 }
 
 /**
- * How many live annotations are plain highlights and how many carry a note
- * body, for the hub toolbar's summary line. Partitions on `note.note`
- * truthiness — the same untrimmed rule filterBooknotes applies — so the
- * summary always agrees with what the Highlights/Notes chips select.
+ * Overlapping facet counts for the hub toolbar: selected text counts as a
+ * highlight and a note body counts as a note, so one annotation can increment
+ * both. Uses the same truthiness rules as filterBooknotes so the summary and
+ * filter chips agree.
  */
 export function summarizeAnnotations(notes: BookNote[]): AnnotationCounts {
   let highlights = 0;
   let noteCount = 0;
   for (const note of notes) {
     if (note.deletedAt) continue;
+    if (note.text) highlights += 1;
     if (note.note) noteCount += 1;
-    else highlights += 1;
   }
   return { highlights, notes: noteCount };
 }

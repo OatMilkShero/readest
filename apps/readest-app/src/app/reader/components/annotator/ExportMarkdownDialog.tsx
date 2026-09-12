@@ -32,7 +32,7 @@ import {
 } from '@/utils/deeplink';
 import Dialog from '@/components/Dialog';
 import type { SavedGPTInsight } from '@/services/reader-gpt/types';
-import { normalizeReadingKnowledge } from '@/services/knowledge/normalize';
+import { filterReadingKnowledge, normalizeReadingKnowledge } from '@/services/knowledge/normalize';
 import { renderKnowledgeMarkdown } from '@/services/knowledge/markdown';
 
 interface ExportMarkdownDialogProps {
@@ -145,6 +145,9 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
       excludedStyles: noteExportConfig.excludedStyles ?? [],
       // Configs persisted before the cover option existed.
       includeCoverImage: noteExportConfig.includeCoverImage ?? false,
+      // Configs persisted before GPT Insights joined knowledge export include
+      // them by default, matching the prior export behavior.
+      includeGPTInsights: noteExportConfig.includeGPTInsights ?? true,
       // Configs persisted before the format select existed only recorded the
       // markdown/plain-text toggle.
       exportFormat:
@@ -246,6 +249,48 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
     [bookAuthor, bookHash, bookKey, bookTitle, filteredGroups, getBookData, insights],
   );
 
+  const scopedKnowledge = useMemo(
+    () =>
+      filterReadingKnowledge(knowledge, {
+        highlights: exportConfig.includeQuotes,
+        notes: exportConfig.includeNotes,
+        gptInsights: exportConfig.includeGPTInsights,
+      }),
+    [
+      exportConfig.includeGPTInsights,
+      exportConfig.includeNotes,
+      exportConfig.includeQuotes,
+      knowledge,
+    ],
+  );
+
+  const scopedAnnotationIds = useMemo(
+    () =>
+      new Set(
+        scopedKnowledge.chapters.flatMap((chapter) =>
+          chapter.entries.filter((entry) => entry.kind === 'annotation').map((entry) => entry.id),
+        ),
+      ),
+    [scopedKnowledge],
+  );
+
+  const scopedGroups = useMemo(
+    () =>
+      filteredGroups
+        .map((group) => ({
+          ...group,
+          booknotes: group.booknotes.filter((note) => scopedAnnotationIds.has(note.id)),
+        }))
+        .filter((group) => group.booknotes.length > 0),
+    [filteredGroups, scopedAnnotationIds],
+  );
+
+  const scopedInsights = exportConfig.includeGPTInsights ? insights : [];
+  const scopedKnowledgeCount = scopedKnowledge.chapters.reduce(
+    (count, chapter) => count + chapter.entries.length,
+    0,
+  );
+
   const toggleExcludedColor = (color: HighlightColor) => {
     setExportConfig((prev) => ({
       ...prev,
@@ -298,14 +343,14 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
 
     if (exportConfig.useCustomTemplate) {
       // Prepare data for template rendering
-      const sortedGroups = filteredGroups;
+      const sortedGroups = scopedGroups;
 
       const templateData = {
         title: bookTitle,
         author: bookAuthor,
         exportDate: Date.now(),
         coverImageUrl: coverImageUrl ?? '',
-        gptInsights: insights.map((insight) => ({
+        gptInsights: scopedInsights.map((insight) => ({
           ...insight,
           link: insight.locator
             ? buildAnnotationUrl(
@@ -339,14 +384,16 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
 
       output = renderNoteTemplate(exportConfig.customTemplate, templateData);
     } else {
-      output = renderKnowledgeMarkdown(knowledge, {
+      output = renderKnowledgeMarkdown(scopedKnowledge, {
         linkType: exportConfig.linkType,
         includeTitle: exportConfig.includeTitle,
         includeAuthor: exportConfig.includeAuthor,
         includeDate: exportConfig.includeDate,
         includeChapterTitles: exportConfig.includeChapterTitles,
-        includeQuotes: exportConfig.includeQuotes,
-        includeNotes: exportConfig.includeNotes,
+        // Scope selection decides which complete entries are rendered. An
+        // overlapping highlight+note therefore keeps both fields and appears once.
+        includeQuotes: true,
+        includeNotes: true,
         includePageNumber: exportConfig.includePageNumber,
         includeTimestamp: exportConfig.includeTimestamp,
         includeChapterSeparator: exportConfig.includeChapterSeparator,
@@ -374,8 +421,9 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
     progress,
     location,
     coverImageUrl,
-    knowledge,
-    insights,
+    scopedKnowledge,
+    scopedGroups,
+    scopedInsights,
     _,
   ]);
 
@@ -419,7 +467,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
   return (
     <Dialog
       isOpen={isOpen}
-      title={_('Export Annotations')}
+      title={_('Export Knowledge')}
       onClose={onCancel}
       boxClassName='sm:!w-[75%] sm:h-auto sm:!max-h-[90vh] sm:!max-w-5xl'
       contentClassName='sm:!px-8 sm:!py-2'
@@ -448,6 +496,43 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
           <p className='text-base-content/70 text-xs'>
             {_('A machine-readable file that Readest can import back into any book.')}
           </p>
+        )}
+
+        {!isJson && (
+          <div className='space-y-3'>
+            <h3 className='font-bold'>{_('Knowledge Items')}</h3>
+            <div className='grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3'>
+              <label className='flex cursor-pointer items-center gap-2'>
+                <input
+                  type='checkbox'
+                  checked={exportConfig.includeQuotes}
+                  onChange={() => handleToggle('includeQuotes')}
+                  className='checkbox checkbox-sm'
+                />
+                <span className='text-sm'>{_('Highlights')}</span>
+              </label>
+
+              <label className='flex cursor-pointer items-center gap-2'>
+                <input
+                  type='checkbox'
+                  checked={exportConfig.includeNotes}
+                  onChange={() => handleToggle('includeNotes')}
+                  className='checkbox checkbox-sm'
+                />
+                <span className='text-sm'>{_('Notes')}</span>
+              </label>
+
+              <label className='flex cursor-pointer items-center gap-2'>
+                <input
+                  type='checkbox'
+                  checked={exportConfig.includeGPTInsights}
+                  onChange={() => handleToggle('includeGPTInsights')}
+                  className='checkbox checkbox-sm'
+                />
+                <span className='text-sm'>{_('GPT Insights')}</span>
+              </label>
+            </div>
+          </div>
         )}
 
         {/* Format Options */}
@@ -525,28 +610,6 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
                   disabled={exportConfig.useCustomTemplate}
                 />
                 <span className='text-sm'>{_('Chapter Separator')}</span>
-              </label>
-
-              <label className='flex cursor-pointer items-center gap-2'>
-                <input
-                  type='checkbox'
-                  checked={exportConfig.includeQuotes}
-                  onChange={() => handleToggle('includeQuotes')}
-                  className='checkbox checkbox-sm'
-                  disabled={exportConfig.useCustomTemplate}
-                />
-                <span className='text-sm'>{_('Highlights')}</span>
-              </label>
-
-              <label className='flex cursor-pointer items-center gap-2'>
-                <input
-                  type='checkbox'
-                  checked={exportConfig.includeNotes}
-                  onChange={() => handleToggle('includeNotes')}
-                  className='checkbox checkbox-sm'
-                  disabled={exportConfig.useCustomTemplate}
-                />
-                <span className='text-sm'>{_('Notes')}</span>
               </label>
 
               <label className='flex cursor-pointer items-center gap-2'>
@@ -942,7 +1005,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
             <button
               onClick={handleExport}
               className='btn btn-primary btn-sm'
-              disabled={filteredNotesCount + insights.length === 0}
+              disabled={isJson ? filteredNotesCount === 0 : scopedKnowledgeCount === 0}
             >
               {_('Export')}
             </button>
