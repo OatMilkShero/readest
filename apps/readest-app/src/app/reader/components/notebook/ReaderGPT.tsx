@@ -23,6 +23,7 @@ import {
   resolveReaderGPTModel,
   type ReaderGPTModel,
 } from '@/services/reader-gpt/models';
+import ReaderGPTMarkdown from './ReaderGPTMarkdown';
 
 const ReaderGPT: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const _ = useTranslation();
@@ -295,9 +296,15 @@ const ReaderGPT: React.FC<{ bookKey: string }> = ({ bookKey }) => {
               )}
               onClick={() => focusedMessageId === message.id && focusMessage(null)}
             >
-              <p className='select-text whitespace-pre-wrap text-sm leading-relaxed'>
-                {message.content}
-              </p>
+              {message.role === 'assistant' ? (
+                <div className='select-text'>
+                  <ReaderGPTMarkdown content={message.content} />
+                </div>
+              ) : (
+                <p className='select-text whitespace-pre-wrap text-sm leading-relaxed'>
+                  {message.content}
+                </p>
+              )}
               {message.role === 'assistant' && (
                 <button
                   type='button'
@@ -315,9 +322,9 @@ const ReaderGPT: React.FC<{ bookKey: string }> = ({ bookKey }) => {
 
         {isStreaming && (
           <div className='eink-bordered border-base-300 bg-base-100 me-8 rounded-lg border p-3'>
-            <p className='select-text whitespace-pre-wrap text-sm leading-relaxed'>
-              {streamingAnswer || _('Thinking...')}
-            </p>
+            <div className='select-text'>
+              <ReaderGPTMarkdown content={streamingAnswer || _('Thinking...')} />
+            </div>
           </div>
         )}
         {error && <p className='text-error px-1 text-sm'>{error}</p>}
