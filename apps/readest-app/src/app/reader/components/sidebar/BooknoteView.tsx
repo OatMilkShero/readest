@@ -8,6 +8,7 @@ import { RiBookmark3Line, RiBookmarkLine } from 'react-icons/ri';
 
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
+import { useReaderGPTStore } from '@/store/readerGPTStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { findTocItemBS } from '@/services/nav';
 import { findNearestCfi } from '@/utils/cfi';
@@ -21,6 +22,7 @@ import {
 } from '@/types/book';
 import { useTranslation } from '@/hooks/useTranslation';
 import { eventDispatcher } from '@/utils/event';
+import type { SavedGPTInsight } from '@/services/reader-gpt/types';
 import {
   filterBooknotes,
   collectAnnotationFacets,
@@ -29,17 +31,19 @@ import {
 } from '../../utils/annotatorUtil';
 import AnnotationsToolbar from './AnnotationsToolbar';
 import BooknoteItem from './BooknoteItem';
+import GPTInsightItem from './GPTInsightItem';
 import EmptyState from '../EmptyState';
 
 type FlatBooknoteRow =
-  | { kind: 'group-header'; key: string; group: BooknoteGroup }
+  | { kind: 'group-header'; key: string; label: string }
   | {
       kind: 'note';
       key: string;
       group: BooknoteGroup;
       item: BookNote;
       indexInGroup: number;
-    };
+    }
+  | { kind: 'insight'; key: string; insight: SavedGPTInsight };
 
 const BooknoteView: React.FC<{
   type: BookNoteType;
@@ -49,11 +53,16 @@ const BooknoteView: React.FC<{
   const _ = useTranslation();
   const { getConfig } = useBookDataStore();
   const { getProgress } = useReaderStore();
+  const { insights, loadBook } = useReaderGPTStore();
   const { setActiveBooknoteType, setBooknoteResults, isSearchBarVisible, setSearchBarVisible } =
     useSidebarStore();
   const config = getConfig(bookKey)!;
   const progress = getProgress(bookKey);
   const allNotes = config.booknotes ?? [];
+
+  useEffect(() => {
+    if (type === 'annotation') void loadBook(bookKey.split('-')[0] ?? '');
+  }, [bookKey, loadBook, type]);
 
   const [filterKind, setFilterKind] = useState<AnnotationFilterKind>('all');
   const [searchInput, setSearchInput] = useState('');
@@ -146,23 +155,77 @@ const BooknoteView: React.FC<{
     return Object.values(groups).sort((a, b) => a.id - b.id);
   }, [filteredNotes, toc]);
 
+  const visibleInsights = useMemo(() => {
+    if (type !== 'annotation' || filterKind !== 'all') return [];
+    if (excludedColors.length > 0 || excludedStyles.length > 0) return [];
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return insights.filter((insight) => {
+      if (insight.bookHash !== (bookKey.split('-')[0] ?? '')) return false;
+      if (!normalizedQuery) return true;
+      return [insight.chapter, insight.selectedPassage, insight.question, insight.answer].some(
+        (value) => value?.toLocaleLowerCase().includes(normalizedQuery),
+      );
+    });
+  }, [bookKey, excludedColors, excludedStyles, filterKind, insights, query, type]);
+
   // Flatten group/item tree into a single virtualizable list.
   const flatItems = useMemo<FlatBooknoteRow[]>(() => {
-    const rows: FlatBooknoteRow[] = [];
+    const groups = new Map<
+      string,
+      {
+        id: number;
+        href: string;
+        label: string;
+        notes: BooknoteGroup[];
+        insights: SavedGPTInsight[];
+      }
+    >();
     for (const group of sortedGroups) {
-      rows.push({ kind: 'group-header', key: `h-${group.href}`, group });
-      group.booknotes.forEach((item, indexInGroup) => {
-        rows.push({
-          kind: 'note',
-          key: `n-${group.href}-${indexInGroup}-${item.cfi}`,
-          group,
-          item,
-          indexInGroup,
-        });
+      groups.set(group.href || `native-${group.id}-${group.label}`, {
+        id: group.id,
+        href: group.href,
+        label: group.label,
+        notes: [group],
+        insights: [],
       });
     }
+    for (const insight of visibleInsights) {
+      const tocItem = findTocItemBS(toc ?? [], insight.locator || insight.href || '');
+      const href = tocItem?.href || insight.href || `insight-${insight.chapter || 'untitled'}`;
+      const existing = groups.get(href);
+      if (existing) {
+        existing.insights.push(insight);
+      } else {
+        groups.set(href, {
+          id: tocItem?.id ?? Number.MAX_SAFE_INTEGER,
+          href,
+          label: tocItem?.label || insight.chapter || _('Untitled'),
+          notes: [],
+          insights: [insight],
+        });
+      }
+    }
+
+    const rows: FlatBooknoteRow[] = [];
+    for (const combined of [...groups.values()].sort((a, b) => a.id - b.id)) {
+      rows.push({ kind: 'group-header', key: `h-${combined.href}`, label: combined.label });
+      for (const group of combined.notes) {
+        group.booknotes.forEach((item, indexInGroup) => {
+          rows.push({
+            kind: 'note',
+            key: `n-${group.href}-${indexInGroup}-${item.cfi}`,
+            group,
+            item,
+            indexInGroup,
+          });
+        });
+      }
+      combined.insights
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .forEach((insight) => rows.push({ kind: 'insight', key: `i-${insight.id}`, insight }));
+    }
     return rows;
-  }, [sortedGroups]);
+  }, [_, sortedGroups, toc, visibleInsights]);
 
   // Nearest cfi for "current" highlight; sortedGroups identity tracks content
   // changes so stale cached cfis aren't kept after a delete/edit.
@@ -342,10 +405,15 @@ const BooknoteView: React.FC<{
       if (row.kind === 'group-header') {
         return (
           <div className='px-2 pt-2'>
-            <h3 className='content font-size-base line-clamp-1 px-2 font-normal'>
-              {row.group.label}
-            </h3>
+            <h3 className='content font-size-base line-clamp-1 px-2 font-normal'>{row.label}</h3>
           </div>
+        );
+      }
+      if (row.kind === 'insight') {
+        return (
+          <ul className='px-2'>
+            <GPTInsightItem bookKey={bookKey} insight={row.insight} />
+          </ul>
         );
       }
       return (
@@ -368,7 +436,7 @@ const BooknoteView: React.FC<{
   // empty state. Otherwise transitioning empty -> populated (e.g. after
   // importing notes) would leave Virtuoso stuck at the initial 400px until a
   // remount (tab switch) occurs.
-  const isEmpty = sortedGroups.length === 0;
+  const isEmpty = flatItems.length === 0;
 
   return (
     <div className='booknote-list rounded' role='tree'>
@@ -379,7 +447,7 @@ const BooknoteView: React.FC<{
           isSearchVisible={isSearchBarVisible}
           highlightCount={counts.highlights}
           noteCount={counts.notes}
-          matchCount={filteredNotes.length}
+          matchCount={filteredNotes.length + visibleInsights.length}
           isFiltering={isFiltering}
           onCloseSearch={() => setSearchBarVisible(false)}
           colors={facets.colors}

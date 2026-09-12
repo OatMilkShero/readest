@@ -16,11 +16,12 @@ describe('annotationToolbar helpers', () => {
     expect(ALL_ANNOTATION_TOOL_TYPES).toEqual(annotationToolButtons.map((b) => b.type));
   });
 
-  test('default toolbar is the eight non-share tools in canonical order', () => {
+  test('default toolbar includes Ask GPT in canonical order', () => {
     expect(DEFAULT_ANNOTATION_TOOLBAR_ITEMS).toEqual([
       'copy',
       'highlight',
       'annotate',
+      'askgpt',
       'search',
       'dictionary',
       'translate',
@@ -45,6 +46,15 @@ describe('annotationToolbar helpers', () => {
     expect(getToolbarToolTypes(['search', 'copy'], true)).toEqual(['search', 'copy']);
   });
 
+  test('upgrades the legacy default toolbar with Ask GPT', () => {
+    expect(
+      getToolbarToolTypes(
+        ['copy', 'highlight', 'annotate', 'search', 'dictionary', 'translate', 'tts', 'proofread'],
+        true,
+      ),
+    ).toEqual(DEFAULT_ANNOTATION_TOOLBAR_ITEMS);
+  });
+
   test('getToolbarToolTypes drops share when !canShare, keeps it when canShare', () => {
     expect(getToolbarToolTypes(['copy', 'share'], false)).toEqual(['copy']);
     expect(getToolbarToolTypes(['copy', 'share'], true)).toEqual(['copy', 'share']);
@@ -59,6 +69,7 @@ describe('annotationToolbar helpers', () => {
       'copylink',
       'highlight',
       'annotate',
+      'askgpt',
       'search',
       'dictionary',
       'translate',

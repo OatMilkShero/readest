@@ -29,6 +29,7 @@ import {
   removeEmptyAnnotationPlaceholder,
 } from '../../utils/annotatorUtil';
 import AIAssistant from './AIAssistant';
+import ReaderGPT from './ReaderGPT';
 import NotebookHeader from './Header';
 import NoteEditor from './NoteEditor';
 import SearchBar from './SearchBar';
@@ -136,7 +137,7 @@ const Notebook: React.FC = ({}) => {
     saveSysSettings(envConfig, 'globalReadSettings', newGlobalReadSettings);
   };
 
-  const handleTabChange = (tab: 'notes' | 'ai') => {
+  const handleTabChange = (tab: 'notes' | 'ai' | 'gpt') => {
     setNotebookActiveTab(tab);
     const globalReadSettings = settings.globalReadSettings;
     const newGlobalReadSettings = { ...globalReadSettings, notebookActiveTab: tab };
@@ -427,7 +428,11 @@ const Notebook: React.FC = ({}) => {
             </div>
           )}
         </div>
-        {notebookActiveTab === 'ai' ? (
+        {notebookActiveTab === 'gpt' ? (
+          <div className='flex min-h-0 flex-1 flex-col'>
+            <ReaderGPT bookKey={sideBarBookKey} />
+          </div>
+        ) : notebookActiveTab === 'ai' ? (
           <div className='flex min-h-0 flex-1 flex-col'>
             <AIAssistant key={activeConversationId ?? 'new'} bookKey={sideBarBookKey} />
           </div>

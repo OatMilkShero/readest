@@ -2,6 +2,7 @@ import { render, act, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { BookNote } from '@/types/book';
+import type { SavedGPTInsight } from '@/services/reader-gpt/types';
 
 // ---------- Shared mutable test state (captured by the mock factories) ----------
 let scrollToIndexSpy: Mock<(arg: unknown) => void>;
@@ -17,6 +18,8 @@ let capturedInitialized:
 let capturedVirtuosoProps: Record<string, unknown> | undefined;
 let mockProgress: { location: string } | null;
 let mockBooknotes: BookNote[];
+let mockInsights: SavedGPTInsight[];
+const mockLoadBook = vi.fn();
 
 // ---------- Mocks ----------
 // Production code uses per-field selectors; mock must apply them.
@@ -40,6 +43,10 @@ vi.mock('@/store/sidebarStore', () => ({
     setActiveBooknoteType: vi.fn(),
     setBooknoteResults: vi.fn(),
   }),
+}));
+
+vi.mock('@/store/readerGPTStore', () => ({
+  useReaderGPTStore: () => ({ insights: mockInsights, loadBook: mockLoadBook }),
 }));
 
 // Derive a per-chapter TOC group from the spine step of each note's CFI so the
@@ -127,6 +134,8 @@ beforeEach(() => {
   capturedInitialized = undefined;
   capturedVirtuosoProps = undefined;
   mockProgress = null;
+  mockInsights = [];
+  mockLoadBook.mockClear();
   mockBooknotes = [
     makeNote('epubcfi(/6/4!/4/2:0)'),
     makeNote('epubcfi(/6/6!/4/4:0)'),
@@ -138,6 +147,33 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
     return 0;
+  });
+});
+
+describe('BooknoteView — saved GPT insights', () => {
+  it('includes a saved insight in the chapter-grouped annotation list', () => {
+    mockBooknotes = [];
+    mockInsights = [
+      {
+        id: 'insight-1',
+        conversationId: 'conversation-1',
+        assistantMessageId: 'assistant-1',
+        bookHash: 'book1',
+        bookTitle: 'The Book',
+        bookAuthor: 'The Author',
+        chapter: 'Chapter 4',
+        locator: 'epubcfi(/6/4!/4/2:0)',
+        selectedPassage: 'A selected passage',
+        question: 'Why?',
+        answer: 'Because.',
+        createdAt: 1,
+      },
+    ];
+
+    render(<BooknoteView type='annotation' bookKey='book1-view' toc={[]} />);
+
+    expect(mockLoadBook).toHaveBeenCalledWith('book1');
+    expect(capturedVirtuosoProps?.['totalCount']).toBe(2);
   });
 });
 

@@ -16,6 +16,7 @@ export const ALL_ANNOTATION_TOOL_TYPES: AnnotationToolType[] = [
   'copylink',
   'highlight',
   'annotate',
+  'askgpt',
   'search',
   'dictionary',
   'translate',
@@ -24,11 +25,23 @@ export const ALL_ANNOTATION_TOOL_TYPES: AnnotationToolType[] = [
   'share',
 ];
 
-// Default toolbar: the eight pre-existing tools in their original order.
+// Default toolbar: the pre-existing tools plus Ask GPT in their canonical order.
 // 'share' starts hidden in the Available tray per the #4014 design, and
 // 'copylink' is opt-in the same way (#5452) — a niche action most readers
 // never need, reachable by adding it in Customize Toolbar.
 export const DEFAULT_ANNOTATION_TOOLBAR_ITEMS: AnnotationToolType[] = [
+  'copy',
+  'highlight',
+  'annotate',
+  'askgpt',
+  'search',
+  'dictionary',
+  'translate',
+  'tts',
+  'proofread',
+];
+
+const LEGACY_DEFAULT_ANNOTATION_TOOLBAR_ITEMS: AnnotationToolType[] = [
   'copy',
   'highlight',
   'annotate',
@@ -42,7 +55,10 @@ export const DEFAULT_ANNOTATION_TOOLBAR_ITEMS: AnnotationToolType[] = [
 // Drop unknown/duplicate entries; fall back to the default when unset (a
 // pre-existing per-book config may not carry the field yet).
 const sanitize = (items: AnnotationToolType[] | undefined): AnnotationToolType[] => {
-  const source = items ?? DEFAULT_ANNOTATION_TOOLBAR_ITEMS;
+  const isLegacyDefault =
+    items?.length === LEGACY_DEFAULT_ANNOTATION_TOOLBAR_ITEMS.length &&
+    items.every((item, index) => item === LEGACY_DEFAULT_ANNOTATION_TOOLBAR_ITEMS[index]);
+  const source = !items || isLegacyDefault ? DEFAULT_ANNOTATION_TOOLBAR_ITEMS : items;
   const seen = new Set<AnnotationToolType>();
   const out: AnnotationToolType[] = [];
   for (const type of source) {

@@ -3,7 +3,7 @@ import { FiSearch } from 'react-icons/fi';
 import { FiCopy } from 'react-icons/fi';
 import { FiLink } from 'react-icons/fi';
 import { FiShare } from 'react-icons/fi';
-import { PiHighlighterFill } from 'react-icons/pi';
+import { PiHighlighterFill, PiSparkle } from 'react-icons/pi';
 import { LuBookA } from 'react-icons/lu';
 import { BsPencilSquare } from 'react-icons/bs';
 import { BsTranslate } from 'react-icons/bs';
@@ -62,6 +62,12 @@ export const annotationToolButtons = createAnnotationToolButtons([
     label: _('Annotate'),
     tooltip: _('Annotate text after selection'),
     Icon: BsPencilSquare,
+  },
+  {
+    type: 'askgpt',
+    label: _('Ask GPT'),
+    tooltip: _('Ask GPT about selection'),
+    Icon: PiSparkle,
   },
   {
     type: 'search',

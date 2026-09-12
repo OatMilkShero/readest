@@ -19,6 +19,7 @@ import { getBookProgress, useBookProgress } from '@/store/readerProgressStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useNotebookStore } from '@/store/notebookStore';
+import { useReaderGPTStore } from '@/store/readerGPTStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useCustomDictionaryStore } from '@/store/customDictionaryStore';
 import { isSystemDictionaryEnabled } from '@/services/dictionaries/registry';
@@ -101,6 +102,8 @@ import {
   convertAnnotationExportToBookNotes,
   parseAnnotationExport,
 } from '@/services/annotation/providers/readest';
+import { readerGPTRepository } from '@/services/reader-gpt/repository';
+import type { SavedGPTInsight } from '@/services/reader-gpt/types';
 
 const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   bookKey,
@@ -121,8 +124,14 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const getView = useReaderStore((s) => s.getView);
   const getViewsById = useReaderStore((s) => s.getViewsById);
   const getViewSettings = useReaderStore((s) => s.getViewSettings);
-  const { setNotebookVisible, setNotebookNewAnnotation, setNotebookNewHighlightId } =
-    useNotebookStore();
+  const {
+    setNotebookVisible,
+    setNotebookActiveTab,
+    setNotebookNewAnnotation,
+    setNotebookNewHighlightId,
+  } = useNotebookStore();
+  const { setCurrentSelection: setReaderGPTSelection, addSelection: addReaderGPTSelection } =
+    useReaderGPTStore();
   const { clearBooknotesNav, isSideBarVisible } = useSidebarStore();
   const { listenToNativeTouchEvents } = useDeviceControlStore();
   const { loadCustomDictionaries } = useCustomDictionaryStore();
@@ -179,6 +188,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const [clearAnnotationsCount, setClearAnnotationsCount] = useState(0);
   const [exportData, setExportData] = useState<{
     booknoteGroups: { [href: string]: BooknoteGroup };
+    insights: SavedGPTInsight[];
   } | null>(null);
 
   const [selectedStyle, setSelectedStyle] = useState<HighlightStyle>(
@@ -368,6 +378,33 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     }
     isTextSelected.current = false;
   };
+
+  const makeReaderGPTSelection = useCallback(() => {
+    const book = bookData.book;
+    if (!selection?.text || !book || book.format !== 'EPUB' || bookData.isFixedLayout) return null;
+    const cfi =
+      selection.cfi ||
+      (selection.popup ? undefined : view?.getCFI(selection.index, selection.range));
+    const chapter = cfi ? findTocItemBS(bookData.bookDoc?.toc ?? [], cfi)?.label : undefined;
+    return {
+      id: uniqueId(),
+      bookHash: bookKey.split('-')[0]!,
+      bookTitle: book.title,
+      bookAuthor: book.author,
+      quote: selection.text.trim(),
+      ...(chapter ? { chapter } : {}),
+      ...(cfi ? { locator: cfi } : {}),
+      ...(selection.href || progress?.sectionHref
+        ? { href: selection.href || progress?.sectionHref }
+        : {}),
+      ...(selection.page ? { page: selection.page } : {}),
+      createdAt: Date.now(),
+    };
+  }, [bookData, bookKey, progress?.sectionHref, selection, view]);
+
+  useEffect(() => {
+    setReaderGPTSelection(makeReaderGPTSelection());
+  }, [makeReaderGPTSelection, setReaderGPTSelection]);
 
   // Whether the currently shown selection came from the footnote popup, for
   // event handlers that only know the incoming event, not the selection state.
@@ -1455,6 +1492,16 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     handleDismissPopup();
   };
 
+  const handleAskGPT = async () => {
+    const context = makeReaderGPTSelection();
+    if (!context) return;
+    setReaderGPTSelection(context);
+    await addReaderGPTSelection(context);
+    setNotebookVisible(true);
+    setNotebookActiveTab('gpt');
+    handleDismissPopupAndSelection();
+  };
+
   const handleSearch = () => {
     if (!selection || !selection.text) return;
     handleDismissPopupAndSelection();
@@ -1839,10 +1886,11 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     const config = getConfig(bookKey)!;
     const { booknotes: allNotes = [] } = config;
     const booknotes = allNotes.filter((note) => !note.deletedAt);
-    if (booknotes.length === 0) {
+    const insights = await readerGPTRepository.getInsights(book.hash);
+    if (booknotes.length === 0 && insights.length === 0) {
       eventDispatcher.dispatch('toast', {
         type: 'info',
-        message: _('No annotations to export'),
+        message: _('No reading knowledge to export'),
         className: 'whitespace-nowrap',
         timeout: 2000,
       });
@@ -1868,7 +1916,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
       });
     });
 
-    setExportData({ booknoteGroups });
+    setExportData({ booknoteGroups, insights });
     setShowExportDialog(true);
   };
 
@@ -2018,6 +2066,13 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
           Icon,
           onClick: handleAnnotate,
           disabled: popupSelectionNoCfi,
+        };
+      case 'askgpt':
+        return {
+          tooltipText: _(label),
+          Icon,
+          onClick: () => void handleAskGPT(),
+          visible: bookData.book?.format === 'EPUB' && !bookData.isFixedLayout,
         };
       case 'search':
         return { tooltipText: _(label), Icon, onClick: handleSearch };
@@ -2201,6 +2256,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
           progress={getConfig(bookKey)?.progress}
           location={getConfig(bookKey)?.location}
           booknoteGroups={exportData.booknoteGroups}
+          insights={exportData.insights}
           onCancel={handleCancelExport}
           onExport={handleConfirmExport}
         />

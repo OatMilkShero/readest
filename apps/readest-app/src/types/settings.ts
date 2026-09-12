@@ -6,6 +6,7 @@ import { OPDSCatalog } from './opds';
 import type { AISettings } from '@/services/ai/types';
 import type { NotebookTab } from '@/store/notebookStore';
 import type { DictionarySettings, ImportedDictionary } from '@/services/dictionaries/types';
+import type { ReaderGPTModel } from '@/services/reader-gpt/models';
 
 export type ThemeType = 'light' | 'dark' | 'auto';
 export type LibraryViewModeType = 'grid' | 'list';
@@ -58,6 +59,7 @@ export interface ReadSettings {
   translationProvider: string;
   translateTargetLang: string;
   openAITranslationModel?: string;
+  readerGPTModel?: ReaderGPTModel;
   /**
    * Global Word Lens toggle: auto-download a gloss pack on demand when the
    * pair isn't cached locally. When off, the reader never fetches packs

@@ -22,7 +22,7 @@ import {
   getHighlightColorHex,
   getHighlightColorLabel,
 } from '@/app/reader/utils/annotatorUtil';
-import { renderNoteTemplate, formatBlockQuote } from '@/utils/note';
+import { renderNoteTemplate } from '@/utils/note';
 import { getPublicCoverUrl } from '@/utils/cover';
 import {
   AnnotationLinkType,
@@ -31,6 +31,9 @@ import {
   buildAnnotationWebUrl,
 } from '@/utils/deeplink';
 import Dialog from '@/components/Dialog';
+import type { SavedGPTInsight } from '@/services/reader-gpt/types';
+import { normalizeReadingKnowledge } from '@/services/knowledge/normalize';
+import { renderKnowledgeMarkdown } from '@/services/knowledge/markdown';
 
 interface ExportMarkdownDialogProps {
   bookKey: string;
@@ -45,6 +48,7 @@ interface ExportMarkdownDialogProps {
   progress?: [number, number];
   location?: string;
   booknoteGroups: { [href: string]: BooknoteGroup };
+  insights: SavedGPTInsight[];
   onCancel: () => void;
   onExport: (
     content: string,
@@ -64,6 +68,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
   progress,
   location,
   booknoteGroups,
+  insights,
   onCancel,
   onExport,
 }) => {
@@ -108,7 +113,23 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
 {% endfor %}
 
 ---
-{% endfor %}`;
+{% endfor %}
+{% if gptInsights.length %}
+### ${_('GPT Insights')}
+{% for insight in gptInsights %}
+> {{ insight.selectedPassage }}
+
+**${_('Me')}**
+{{ insight.question }}
+
+**GPT**
+{{ insight.answer }}
+
+[${_('Open in Readest')}]({{ insight.link }})
+
+---
+{% endfor %}
+{% endif %}`;
 
   const [exportConfig, setExportConfig] = useState<NoteExportConfig>(() => {
     const noteExportConfig = viewSettings?.noteExportConfig || DEFAULT_NOTE_EXPORT_CONFIG;
@@ -210,6 +231,21 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
     [filteredGroups],
   );
 
+  const knowledge = useMemo(
+    () =>
+      normalizeReadingKnowledge({
+        book: getBookData(bookKey)?.book ?? {
+          hash: bookHash,
+          title: bookTitle,
+          author: bookAuthor,
+          tags: [],
+        },
+        annotationGroups: filteredGroups,
+        insights,
+      }),
+    [bookAuthor, bookHash, bookKey, bookTitle, filteredGroups, getBookData, insights],
+  );
+
   const toggleExcludedColor = (color: HighlightColor) => {
     setExportConfig((prev) => ({
       ...prev,
@@ -269,6 +305,15 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
         author: bookAuthor,
         exportDate: Date.now(),
         coverImageUrl: coverImageUrl ?? '',
+        gptInsights: insights.map((insight) => ({
+          ...insight,
+          link: insight.locator
+            ? buildAnnotationUrl(
+                { bookHash, noteId: insight.id, cfi: insight.locator },
+                exportConfig.linkType,
+              )
+            : '',
+        })),
         chapters: sortedGroups.map((group) => ({
           title: group.label || _('Untitled'),
           annotations: group.booknotes.map((note) => ({
@@ -294,97 +339,21 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
 
       output = renderNoteTemplate(exportConfig.customTemplate, templateData);
     } else {
-      // Default formatting (non-template mode)
-      const sortedGroups = filteredGroups;
-
-      const lines: string[] = [];
-
-      // Add cover image (placed first, mirroring Readwise's own exports).
-      // `|300` is Obsidian's image-width syntax; other renderers treat it as
-      // alt text and ignore it.
+      output = renderKnowledgeMarkdown(knowledge, {
+        linkType: exportConfig.linkType,
+        includeTitle: exportConfig.includeTitle,
+        includeAuthor: exportConfig.includeAuthor,
+        includeDate: exportConfig.includeDate,
+        includeChapterTitles: exportConfig.includeChapterTitles,
+        includeQuotes: exportConfig.includeQuotes,
+        includeNotes: exportConfig.includeNotes,
+        includePageNumber: exportConfig.includePageNumber,
+        includeTimestamp: exportConfig.includeTimestamp,
+        includeChapterSeparator: exportConfig.includeChapterSeparator,
+      });
       if (exportConfig.includeCoverImage && coverImageUrl) {
-        lines.push(`![cover|300](${coverImageUrl})`);
-        lines.push('');
+        output = `![cover|300](${coverImageUrl})\n\n${output}`;
       }
-
-      // Add title
-      if (exportConfig.includeTitle) {
-        lines.push(`# ${bookTitle}`);
-      }
-
-      // Add author
-      if (exportConfig.includeAuthor && bookAuthor) {
-        lines.push(`**${_('Author')}**: ${bookAuthor}`);
-        lines.push('');
-      }
-
-      // Add export date
-      if (exportConfig.includeDate) {
-        lines.push(`**${_('Exported from Readest')}**: ${new Date().toISOString().slice(0, 10)}`);
-        lines.push('');
-      }
-
-      if (exportConfig.includeTitle || exportConfig.includeAuthor || exportConfig.includeDate) {
-        lines.push('---');
-        lines.push('');
-      }
-
-      lines.push(`## ${_('Highlights & Annotations')}`);
-      lines.push('');
-
-      for (const group of sortedGroups) {
-        // Add chapter title
-        if (exportConfig.includeChapterTitles) {
-          const chapterTitle = group.label || _('Untitled');
-          lines.push(`### ${chapterTitle}`);
-        }
-
-        for (const note of group.booknotes) {
-          // Add quote
-          if (exportConfig.includeQuotes && note.text) {
-            lines.push(formatBlockQuote(note.text));
-          }
-
-          // Add note
-          if (exportConfig.includeNotes && note.note) {
-            lines.push('');
-            lines.push(`**${_('Note')}**: ${note.note}`);
-          }
-
-          let pageStr = '';
-          if (exportConfig.includePageNumber && note.page) {
-            const pageText = _('Page: {{number}}', { number: note.page });
-            if (bookHash && note.id) {
-              const url = buildAnnotationUrl(
-                { bookHash, noteId: note.id, cfi: note.cfi },
-                exportConfig.linkType,
-              );
-              pageStr = `[${pageText}](${url})`;
-            } else {
-              pageStr = pageText;
-            }
-          }
-          let timestampStr = '';
-          if (exportConfig.includeTimestamp && note.updatedAt) {
-            const timestamp = new Date(note.updatedAt).toLocaleString();
-            timestampStr = `${_('Time:')} ${timestamp}`;
-          }
-          const infoParts = [pageStr, timestampStr].filter(Boolean);
-          if (infoParts.length > 0) {
-            lines.push('');
-            lines.push(`*${infoParts.join(' · ')}*`);
-          }
-
-          lines.push(exportConfig.noteSeparator);
-        }
-
-        if (exportConfig.includeChapterSeparator) {
-          lines.push('---');
-          lines.push('');
-        }
-      }
-
-      output = lines.join('\n');
     }
 
     // Strip markdown if plain text export is enabled
@@ -405,6 +374,8 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
     progress,
     location,
     coverImageUrl,
+    knowledge,
+    insights,
     _,
   ]);
 
@@ -971,7 +942,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
             <button
               onClick={handleExport}
               className='btn btn-primary btn-sm'
-              disabled={filteredNotesCount === 0}
+              disabled={filteredNotesCount + insights.length === 0}
             >
               {_('Export')}
             </button>

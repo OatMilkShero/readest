@@ -285,6 +285,7 @@ export const DEFAULT_READSETTINGS: ReadSettings = {
   translationProvider: 'deepl',
   translateTargetLang: 'EN',
   openAITranslationModel: 'gpt-5.6-luna',
+  readerGPTModel: 'gpt-5.6-terra',
   wordLensAutoDownload: true,
 
   customThemes: [],
