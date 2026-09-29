@@ -12,23 +12,21 @@ const mocks = vi.hoisted(() => {
   const state = { booknotes: [] as { note: string; deletedAt?: number | null }[] };
   return {
     state,
-    setNotebookVisible: vi.fn(),
-    setNotebookEditAnnotation: vi.fn(),
+    toast: vi.fn(),
     addAnnotation: vi.fn(),
     saveConfig: vi.fn(),
-    updateBooknotes: vi.fn(() => ({ booknotes: state.booknotes })),
+    // Mirrors the real store: `updateBooknotes` writes back whatever array
+    // it's called with (production code now returns a new array from
+    // `updateBooknoteNoteText` instead of mutating the existing one).
+    updateBooknotes: vi.fn((_key: string, booknotes: typeof state.booknotes) => {
+      state.booknotes = booknotes;
+      return { booknotes: state.booknotes };
+    }),
   };
 });
 
-vi.mock('@/store/notebookStore', () => ({
-  useNotebookStore: () => ({
-    setNotebookVisible: mocks.setNotebookVisible,
-    setNotebookEditAnnotation: mocks.setNotebookEditAnnotation,
-  }),
-}));
-
 vi.mock('@/context/EnvContext', () => ({
-  useEnv: () => ({ envConfig: {} }),
+  useEnv: () => ({ envConfig: {}, appService: { isMobile: false } }),
 }));
 
 vi.mock('@/store/settingsStore', () => ({
@@ -94,10 +92,10 @@ afterEach(() => {
 });
 
 describe('BooknoteItem', () => {
-  it('never opens the notebook when a noted item is clicked', () => {
+  it('navigates without starting an edit when a noted item body is clicked', () => {
     renderItem(makeItem({ note: 'my note' }));
     fireEvent.click(screen.getByText('highlighted words'));
-    expect(mocks.setNotebookVisible).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('booknote-note-editor')).toBeNull();
   });
 
   it('shows Add Note on a bare highlight and saves a new note inline', () => {
@@ -168,13 +166,13 @@ describe('BooknoteItem', () => {
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 
-  it('routes Edit to the notebook editor without inlineNoteEditing', () => {
+  it('edits an existing annotation note inline without the add-note opt-in', () => {
     const item = makeItem({ note: 'my note' });
     renderItem(item);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(mocks.setNotebookEditAnnotation).toHaveBeenCalledWith(item);
-    expect(mocks.setNotebookVisible).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId('booknote-note-editor')).not.toBeNull();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('my note');
   });
 
   it('hides the edit affordance for bare highlights without inlineNoteEditing', () => {

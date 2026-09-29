@@ -110,6 +110,42 @@ describe('reading knowledge export scope', () => {
             createdAt: 3,
             updatedAt: 3,
           },
+          {
+            id: 'excerpt',
+            type: 'excerpt',
+            cfi: 'cfi-4',
+            text: 'Excerpt text',
+            note: '',
+            createdAt: 4,
+            updatedAt: 4,
+          },
+          {
+            id: 'bookmark',
+            type: 'bookmark',
+            cfi: 'cfi-5',
+            text: 'Bookmark text',
+            note: '',
+            createdAt: 5,
+            updatedAt: 5,
+          },
+          {
+            id: 'notebook',
+            type: 'notebook',
+            cfi: '',
+            note: '# Notebook',
+            createdAt: 6,
+            updatedAt: 6,
+          },
+          {
+            id: 'deleted',
+            type: 'annotation',
+            cfi: 'cfi-6',
+            text: 'Deleted highlight',
+            note: '',
+            createdAt: 7,
+            updatedAt: 7,
+            deletedAt: 8,
+          },
         ],
       },
     ],
@@ -143,6 +179,12 @@ describe('reading knowledge export scope', () => {
   it('exports the highlight and note union with overlapping items only once', () => {
     expect(ids(true, true)).toEqual(['highlight-only', 'note-only', 'overlap']);
     expect(ids(true, true).filter((id) => id === 'overlap')).toHaveLength(1);
+  });
+
+  it('excludes excerpts, bookmarks, Notebook documents, and deleted annotations', () => {
+    expect(
+      knowledge.chapters.flatMap((chapter) => chapter.entries.map((entry) => entry.id)),
+    ).toEqual(['highlight-only', 'note-only', 'overlap', 'insight']);
   });
 
   it('keeps GPT Insights as an independently selectable category', () => {

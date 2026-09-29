@@ -93,8 +93,10 @@ const ProofreadPopup: React.FC<ProofreadPopupProps> = ({
 
       if (scope === 'selection') {
         range.deleteContents();
-        const textNode = document.createTextNode(replacementText);
-        range.insertNode(textNode);
+        if (replacementText) {
+          const textNode = document.createTextNode(replacementText);
+          range.insertNode(textNode);
+        }
       }
 
       const options: CreateProofreadRuleOptions = {
@@ -155,7 +157,7 @@ const ProofreadPopup: React.FC<ProofreadPopupProps> = ({
                   onClick={onManage}
                   aria-label={_('Proofread Replacement Rules')}
                   title={_('Proofread Replacement Rules')}
-                  className='shrink-0 rounded p-1 hover:bg-base-200 text-base-content/70 hover:text-base-content transition-colors'
+                  className='shrink-0 rounded-sm p-1 hover:bg-base-200 text-base-content/70 hover:text-base-content transition-colors'
                 >
                   <RiListSettingsLine size={16} />
                 </button>
@@ -175,16 +177,15 @@ const ProofreadPopup: React.FC<ProofreadPopupProps> = ({
                 value={replacementText}
                 onChange={handleInputChange}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && replacementText) {
+                  if (e.key === 'Enter') {
                     handleApply();
                   }
                 }}
                 placeholder={_('Enter text...')}
-                className='bg-base-200 text-base-content placeholder:text-base-content/40 border-base-300 focus:border-primary focus:ring-primary eink-bordered w-full flex-1 rounded-md border p-2 text-sm transition-all focus:outline-none focus:ring-1'
+                className='bg-base-200 text-base-content placeholder:text-base-content/40 border-base-300 focus:border-primary focus:ring-primary eink-bordered w-full flex-1 rounded-md border p-2 text-sm transition-all focus:outline-hidden focus:ring-1'
               />
               <button
                 onClick={handleApply}
-                disabled={!replacementText}
                 className='btn btn-sm btn-contrast shrink-0 font-medium px-2'
               >
                 {_('Apply')}

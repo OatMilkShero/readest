@@ -134,7 +134,9 @@ const ReaderGPT: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     if (!conversation || conversation.hash !== bookHash) {
       conversation = await newConversation(bookInfo);
     }
-    const contextId = conversation.contexts.at(-1)?.id;
+    const contextId =
+      conversation.contexts.find((context) => context.id === conversation.activeContextId)?.id ??
+      conversation.contexts.at(-1)?.id;
     await addMessage('user', content, contextId);
 
     const controller = new AbortController();
@@ -219,6 +221,10 @@ const ReaderGPT: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       (context) =>
         context.locator === currentSelection.locator && context.quote === currentSelection.quote,
     );
+  const activeContext =
+    activeConversation?.contexts.find(
+      (context) => context.id === activeConversation.activeContextId,
+    ) ?? activeConversation?.contexts.at(-1);
 
   return (
     <div className='flex min-h-0 flex-1 flex-col'>
@@ -252,7 +258,7 @@ const ReaderGPT: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       <div className='border-base-300/50 flex items-center gap-2 border-b px-3 py-2'>
         <LuQuote className='shrink-0' />
         <p className='text-base-content/70 min-w-0 flex-1 truncate text-xs'>
-          {activeConversation?.contexts.at(-1)?.quote || _('Select a passage to add context')}
+          {activeContext?.quote || _('Select a passage to add context')}
         </p>
         <button
           type='button'

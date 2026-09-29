@@ -462,9 +462,10 @@ export interface BooknoteFilter {
 }
 
 /**
- * Filter booknotes for the annotations hub and the Notebook search.
+ * Filter source material for the annotations hub.
  *
- * Tombstones are always excluded. Highlights and Notes are overlapping facets:
+ * Tombstones and non-annotation records are always excluded. Highlights and
+ * Notes are overlapping facets:
  * selected text makes an annotation a highlight, while a non-empty note body
  * also makes it a note. The separate GPT Insight store is merged by
  * BooknoteView, so its filter kind selects no BookNotes here. An empty or
@@ -479,6 +480,7 @@ export function filterBooknotes(notes: BookNote[], filter: BooknoteFilter): Book
   const lowercaseQuery = filter.query.trim().toLowerCase();
   return notes.filter((note) => {
     if (note.deletedAt) return false;
+    if (note.type !== 'annotation') return false;
     if (kind === 'gpt-insights') return false;
     if (kind === 'notes' && !note.note) return false;
     if (kind === 'highlights' && !note.text) return false;
@@ -518,26 +520,29 @@ export function collectAnnotationFacets(notes: BookNote[]): AnnotationFacets {
   return { colors, styles };
 }
 
-export interface AnnotationCounts {
+export interface AnnotationHubCounts {
+  annotations: number;
   highlights: number;
   notes: number;
 }
 
 /**
- * Overlapping facet counts for the hub toolbar: selected text counts as a
- * highlight and a note body counts as a note, so one annotation can increment
- * both. Uses the same truthiness rules as filterBooknotes so the summary and
- * filter chips agree.
+ * Counts each live annotation once for the All denominator while also tracking
+ * overlapping highlight and note facets. A highlighted annotation with a note
+ * increments all three fields without being duplicated in the All list.
  */
-export function summarizeAnnotations(notes: BookNote[]): AnnotationCounts {
+export function summarizeAnnotationHub(notes: BookNote[]): AnnotationHubCounts {
+  let annotations = 0;
   let highlights = 0;
   let noteCount = 0;
   for (const note of notes) {
     if (note.deletedAt) continue;
+    if (note.type !== 'annotation') continue;
+    annotations += 1;
     if (note.text) highlights += 1;
     if (note.note) noteCount += 1;
   }
-  return { highlights, notes: noteCount };
+  return { annotations, highlights, notes: noteCount };
 }
 
 export type NoteBubbleTransition = 'add' | 'remove' | 'none';

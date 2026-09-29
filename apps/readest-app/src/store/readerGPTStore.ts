@@ -119,12 +119,13 @@ export const useReaderGPTStore = create<ReaderGPTState>((set, get) => ({
         author: selection.bookAuthor,
       });
     }
-    const duplicate = conversation.contexts.some(
+    const existing = conversation.contexts.find(
       (context) => context.locator === selection.locator && context.quote === selection.quote,
     );
     const updated: ReaderGPTConversation = {
       ...conversation,
-      contexts: duplicate ? conversation.contexts : [...conversation.contexts, selection],
+      contexts: existing ? conversation.contexts : [...conversation.contexts, selection],
+      activeContextId: existing?.id ?? selection.id,
       updatedAt: Date.now(),
     };
     await readerGPTRepository.saveConversation(updated);

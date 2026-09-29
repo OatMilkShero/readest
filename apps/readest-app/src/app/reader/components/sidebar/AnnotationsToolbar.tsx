@@ -232,9 +232,8 @@ const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
   const hasActiveFilters =
     filterKind !== 'all' || excludedColors.length > 0 || excludedStyles.length > 0;
 
-  // The search field takes the whole row when it is open, so the summary only
-  // speaks while it is closed: the mix of the book's annotations at rest, and
-  // how much of it survives the filters once any are on.
+  // The search field takes the whole row when it is open. At rest, category
+  // counts may overlap; while filtering, totalCount is the unique All count.
   const kindLabels = [
     highlightCount > 0 && _('{{count}} Highlights', { count: highlightCount }),
     noteCount > 0 && _('{{count}} Notes', { count: noteCount }),
@@ -273,7 +272,7 @@ const AnnotationsToolbar: React.FC<AnnotationsToolbarProps> = ({
               if (e.key === 'Escape') onCloseSearch();
             }}
             placeholder={_('Search annotations...')}
-            className='w-full min-w-0 bg-transparent p-2 font-sans text-sm font-light focus:outline-none'
+            className='w-full min-w-0 bg-transparent p-2 font-sans text-sm font-light focus:outline-hidden'
           />
           <button
             onClick={onCloseSearch}

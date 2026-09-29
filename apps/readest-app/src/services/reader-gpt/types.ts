@@ -21,6 +21,7 @@ export interface ReaderGPTConversation extends ReaderGPTBook {
   id: string;
   conversationTitle?: string;
   contexts: ReaderGPTSelection[];
+  activeContextId?: string;
   createdAt: number;
   updatedAt: number;
 }

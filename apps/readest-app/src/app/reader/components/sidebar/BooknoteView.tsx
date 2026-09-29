@@ -26,7 +26,7 @@ import type { SavedGPTInsight } from '@/services/reader-gpt/types';
 import {
   filterBooknotes,
   collectAnnotationFacets,
-  summarizeAnnotations,
+  summarizeAnnotationHub,
   AnnotationFilterKind,
 } from '../../utils/annotatorUtil';
 import AnnotationsToolbar from './AnnotationsToolbar';
@@ -112,14 +112,12 @@ const BooknoteView: React.FC<{
     setExcludedStyles([]);
   }, []);
 
-  // Live annotations drive both the facet row (distinct colors/styles) and
-  // the greyed-out state of "Clear Annotations" (mirrors BookMenu).
   const liveAnnotations = useMemo(
     () => allNotes.filter((note) => note.type === 'annotation' && !note.deletedAt),
     [allNotes],
   );
   const facets = useMemo(() => collectAnnotationFacets(liveAnnotations), [liveAnnotations]);
-  const counts = useMemo(() => summarizeAnnotations(liveAnnotations), [liveAnnotations]);
+  const counts = useMemo(() => summarizeAnnotationHub(liveAnnotations), [liveAnnotations]);
   const bookInsights = useMemo(
     () => insights.filter((insight) => insight.bookHash === bookHash),
     [bookHash, insights],
@@ -446,7 +444,13 @@ const BooknoteView: React.FC<{
   const isEmpty = flatItems.length === 0;
 
   return (
-    <div className='booknote-list rounded' role='tree'>
+    <div
+      className='booknote-list rounded-sm'
+      role='tree'
+      data-annotations-heading={type === 'annotation' ? '' : undefined}
+      tabIndex={type === 'annotation' ? -1 : undefined}
+      aria-label={type === 'annotation' ? _('Annotations') : undefined}
+    >
       {type === 'annotation' && (
         <AnnotationsToolbar
           filterKind={filterKind}
@@ -455,7 +459,7 @@ const BooknoteView: React.FC<{
           highlightCount={counts.highlights}
           noteCount={counts.notes}
           insightCount={bookInsights.length}
-          totalCount={liveAnnotations.length + bookInsights.length}
+          totalCount={counts.annotations + bookInsights.length}
           matchCount={filteredNotes.length + visibleInsights.length}
           isFiltering={isFiltering}
           onCloseSearch={() => setSearchBarVisible(false)}

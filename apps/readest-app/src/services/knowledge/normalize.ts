@@ -43,7 +43,7 @@ export const normalizeReadingKnowledge = ({
   for (const group of annotationGroups) {
     const chapter = group.label || 'Untitled';
     for (const note of group.booknotes) {
-      if (note.deletedAt || (!note.text && !note.note)) continue;
+      if (note.type !== 'annotation' || note.deletedAt || (!note.text && !note.note)) continue;
       append(chapter, {
         kind: 'annotation',
         id: note.id,

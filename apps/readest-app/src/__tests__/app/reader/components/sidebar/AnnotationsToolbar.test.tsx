@@ -75,6 +75,7 @@ describe('AnnotationsToolbar', () => {
     expect(defaultProps.onFilterKindChange).toHaveBeenCalledWith('notes');
     fireEvent.click(screen.getByRole('button', { name: 'GPT Insights' }));
     expect(defaultProps.onFilterKindChange).toHaveBeenCalledWith('gpt-insights');
+    expect(screen.queryByRole('button', { name: 'Clippings' })).toBeNull();
   });
 
   it('marks the active chip with aria-pressed', () => {
@@ -145,7 +146,7 @@ describe('AnnotationsToolbar', () => {
     );
   });
 
-  it('summarizes the annotation mix', () => {
+  it('summarizes annotations', () => {
     render(<AnnotationsToolbar {...defaultProps} />);
     expect(screen.getByTestId('annotations-summary').textContent).toBe(
       '9 Highlights · 3 Notes · 2 GPT Insights',
